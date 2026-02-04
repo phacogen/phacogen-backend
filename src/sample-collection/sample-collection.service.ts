@@ -37,11 +37,25 @@ export class SampleCollectionService {
       throw new Error('nguoiGiaoLenh is required. Please ensure user is logged in.');
     }
     
+    // Ensure uuTien is boolean
+    const uuTien = data.uuTien === true || data.uuTien === 'true';
+    
+    console.log('Creating sample collection with data:', {
+      ...data,
+      maLenh,
+      uuTien,
+    });
+    
     const sampleCollection = new this.sampleCollectionModel({
       ...data,
       maLenh,
+      uuTien,
     });
-    return sampleCollection.save();
+    
+    const saved = await sampleCollection.save();
+    console.log('Saved sample collection:', saved);
+    
+    return saved;
   }
 
   async findAll(filter: any = {}): Promise<SampleCollection[]> {
