@@ -3,7 +3,6 @@ import { Document } from 'mongoose';
 
 export enum OrderStatus {
   CHO_DIEU_PHOI = 'CHO_DIEU_PHOI',
-  CHO_NHAN_LENH = 'CHO_NHAN_LENH',
   DANG_THUC_HIEN = 'DANG_THUC_HIEN',
   HOAN_THANH = 'HOAN_THANH',
   DA_HUY = 'DA_HUY',

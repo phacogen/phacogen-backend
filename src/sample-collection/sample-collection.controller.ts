@@ -1,5 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiConsumes } from '@nestjs/swagger';
 import { SampleCollectionService } from './sample-collection.service';
 import { CreateSampleCollectionDto } from './dto/create-sample-collection.dto';
 import { UpdateSampleCollectionDto } from './dto/update-sample-collection.dto';
@@ -26,6 +29,13 @@ export class SampleCollectionController {
   findAll(@Query('status') status?: string) {
     const filter = status ? { trangThai: status } : {};
     return this.sampleCollectionService.findAll(filter);
+  }
+
+  @Get('export/excel')
+  @ApiOperation({ summary: 'Xuất danh sách lệnh nhận mẫu ra Excel' })
+  @ApiResponse({ status: 200, description: 'File Excel' })
+  async exportExcel() {
+    return this.sampleCollectionService.exportToExcel();
   }
 
   @Get('stats/summary')
@@ -107,5 +117,41 @@ export class SampleCollectionController {
   @ApiResponse({ status: 404, description: 'Không tìm thấy lệnh nhận mẫu' })
   delete(@Param('id') id: string) {
     return this.sampleCollectionService.delete(id);
+  }
+
+  @Post(':id/upload-images')
+  @ApiOperation({ summary: 'Upload hình ảnh hoàn thành' })
+  @ApiConsumes('multipart/form-data')
+  @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
+  @ApiResponse({ status: 200, description: 'Upload thành công' })
+  @UseInterceptors(
+    FilesInterceptor('images', 10, {
+      storage: diskStorage({
+        destination: './uploads/sample-collections',
+        filename: (req, file, callback) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const ext = extname(file.originalname);
+          callback(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+        },
+      }),
+      fileFilter: (req, file, callback) => {
+        if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
+          return callback(new Error('Chỉ chấp nhận file ảnh!'), false);
+        }
+        callback(null, true);
+      },
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB
+      },
+    }),
+  )
+  async uploadImages(
+    @Param('id') id: string,
+    @UploadedFiles() files: Array<any>,
+  ) {
+    const imagePaths = files.map(file => `/uploads/sample-collections/${file.filename}`);
+    return this.sampleCollectionService.update(id, {
+      anhHoanThanh: imagePaths,
+    });
   }
 }

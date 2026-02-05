@@ -29,7 +29,7 @@ export class OrderService {
       id,
       { 
         nguoiThucHien,
-        trangThai: OrderStatus.CHO_NHAN_LENH // Chuyển sang CHO_NHAN_LENH thay vì DANG_THUC_HIEN
+        trangThai: OrderStatus.DANG_THUC_HIEN // Chuyển thẳng sang DANG_THUC_HIEN
       },
       { new: true }
     ).exec();
@@ -66,7 +66,6 @@ export class OrderService {
     const stats = {
       total: orders.length,
       choDieuPhoi: orders.filter(o => o.trangThai === OrderStatus.CHO_DIEU_PHOI).length,
-      choNhanLenh: orders.filter(o => o.trangThai === OrderStatus.CHO_NHAN_LENH).length,
       dangThucHien: orders.filter(o => o.trangThai === OrderStatus.DANG_THUC_HIEN).length,
       hoanThanh: orders.filter(o => o.trangThai === OrderStatus.HOAN_THANH).length,
       daHuy: orders.filter(o => o.trangThai === OrderStatus.DA_HUY).length,

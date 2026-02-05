@@ -3,9 +3,9 @@ import { Document, Types } from 'mongoose';
 
 export enum SampleCollectionStatus {
   CHO_DIEU_PHOI = 'CHO_DIEU_PHOI',
-  CHO_NHAN_LENH = 'CHO_NHAN_LENH',
   DANG_THUC_HIEN = 'DANG_THUC_HIEN',
   HOAN_THANH = 'HOAN_THANH',
+  HOAN_THANH_KIEM_TRA = 'HOAN_THANH_KIEM_TRA',
   DA_HUY = 'DA_HUY',
 }
 

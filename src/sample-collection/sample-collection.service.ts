@@ -8,7 +8,7 @@ export class SampleCollectionService {
   constructor(
     @InjectModel(SampleCollection.name)
     private sampleCollectionModel: Model<SampleCollection>,
-  ) {}
+  ) { }
 
   async create(data: any): Promise<SampleCollection> {
     // Tự động generate mã lệnh theo format: TM-ddmmyy-xxx
@@ -17,44 +17,44 @@ export class SampleCollectionService {
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const year = String(now.getFullYear()).slice(-2);
     const datePrefix = `TM-${day}${month}${year}`;
-    
+
     // Tìm số thứ tự cao nhất trong ngày
     const lastOrder = await this.sampleCollectionModel
       .findOne({ maLenh: new RegExp(`^${datePrefix}`) })
       .sort({ maLenh: -1 })
       .exec();
-    
+
     let sequence = 1;
     if (lastOrder && lastOrder.maLenh) {
       const lastSequence = parseInt(lastOrder.maLenh.split('-')[2]);
       sequence = lastSequence + 1;
     }
-    
+
     const maLenh = `${datePrefix}-${String(sequence).padStart(3, '0')}`;
-    
+
     // Nếu không có nguoiGiaoLenh, báo lỗi rõ ràng
     if (!data.nguoiGiaoLenh) {
       throw new Error('nguoiGiaoLenh is required. Please ensure user is logged in.');
     }
-    
+
     // Ensure uuTien is boolean
     const uuTien = data.uuTien === true || data.uuTien === 'true';
-    
+
     console.log('Creating sample collection with data:', {
       ...data,
       maLenh,
       uuTien,
     });
-    
+
     const sampleCollection = new this.sampleCollectionModel({
       ...data,
       maLenh,
       uuTien,
     });
-    
+
     const saved = await sampleCollection.save();
     console.log('Saved sample collection:', saved);
-    
+
     return saved;
   }
 
@@ -108,7 +108,7 @@ export class SampleCollectionService {
         id,
         {
           nhanVienThucHien,
-          trangThai: SampleCollectionStatus.CHO_NHAN_LENH, // Chuyển sang CHO_NHAN_LENH thay vì DANG_THUC_HIEN
+          trangThai: SampleCollectionStatus.DANG_THUC_HIEN,
         },
         { new: true }
       )
@@ -152,9 +152,9 @@ export class SampleCollectionService {
     const stats = {
       total: collections.length,
       choDieuPhoi: collections.filter(c => c.trangThai === SampleCollectionStatus.CHO_DIEU_PHOI).length,
-      choNhanLenh: collections.filter(c => c.trangThai === SampleCollectionStatus.CHO_NHAN_LENH).length,
       dangThucHien: collections.filter(c => c.trangThai === SampleCollectionStatus.DANG_THUC_HIEN).length,
       hoanThanh: collections.filter(c => c.trangThai === SampleCollectionStatus.HOAN_THANH).length,
+      hoanThanhKiemTra: collections.filter(c => c.trangThai === SampleCollectionStatus.HOAN_THANH_KIEM_TRA).length,
       daHuy: collections.filter(c => c.trangThai === SampleCollectionStatus.DA_HUY).length,
       tongSoTienCuocNhanMau: collections.reduce((sum, c) => sum + (c.soTienCuocNhanMau || 0), 0),
       tongSoTienShip: collections.reduce((sum, c) => sum + (c.soTienShip || 0), 0),
@@ -184,5 +184,23 @@ export class SampleCollectionService {
       .populate('nhanVienThucHien')
       .populate('phongKhamKiemTra')
       .exec();
+  }
+
+  async exportToExcel(): Promise<any> {
+    const collections = await this.sampleCollectionModel
+      .find()
+      .populate('phongKham')
+      .populate('noiDungCongViec')
+      .populate('nguoiGiaoLenh')
+      .populate('nhanVienThucHien')
+      .exec();
+
+    // Return data for Excel export
+    // Frontend will handle the actual Excel generation
+    return {
+      success: true,
+      data: collections,
+      message: 'Data ready for export',
+    };
   }
 }
