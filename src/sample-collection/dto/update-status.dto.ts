@@ -12,9 +12,12 @@ export class UpdateSampleCollectionStatusDto {
   @ApiProperty({ 
     example: 'DANG_THUC_HIEN', 
     description: 'Trạng thái mới',
-    enum: ['CHO_DIEU_PHOI', 'CHO_NHAN_LENH', 'DANG_THUC_HIEN', 'HOAN_THANH', 'DA_HUY']
+    enum: ['CHO_DIEU_PHOI', 'DANG_THUC_HIEN', 'HOAN_THANH', 'HOAN_THANH_KIEM_TRA', 'DA_HUY']
   })
   trangThai: string;
+
+  @ApiPropertyOptional({ description: 'ID người thực hiện thay đổi' })
+  nguoiThucHien?: string;
 
   @ApiPropertyOptional({ type: CoordinatesDto, description: 'Vị trí hiện tại' })
   viTri?: CoordinatesDto;

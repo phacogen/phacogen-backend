@@ -1,18 +1,18 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiConsumes } from '@nestjs/swagger';
-import { SampleCollectionService } from './sample-collection.service';
+import { AssignStaffDto } from './dto/assign-staff.dto';
 import { CreateSampleCollectionDto } from './dto/create-sample-collection.dto';
 import { UpdateSampleCollectionDto } from './dto/update-sample-collection.dto';
-import { AssignStaffDto } from './dto/assign-staff.dto';
 import { UpdateSampleCollectionStatusDto } from './dto/update-status.dto';
+import { SampleCollectionService } from './sample-collection.service';
 
 @ApiTags('sample-collections')
 @Controller('sample-collections')
 export class SampleCollectionController {
-  constructor(private readonly sampleCollectionService: SampleCollectionService) {}
+  constructor(private readonly sampleCollectionService: SampleCollectionService) { }
 
   @Post()
   @ApiOperation({ summary: 'Tạo lệnh nhận mẫu mới' })
@@ -45,6 +45,13 @@ export class SampleCollectionController {
     return this.sampleCollectionService.getStatsSummary();
   }
 
+  @Get('history/all')
+  @ApiOperation({ summary: 'Lấy tất cả lịch sử tiến trình (tất cả lệnh)' })
+  @ApiResponse({ status: 200, description: 'Danh sách lịch sử tiến trình' })
+  getAllHistory() {
+    return this.sampleCollectionService.getAllHistory();
+  }
+
   @Get('staff/:staffId')
   @ApiOperation({ summary: 'Lấy danh sách lệnh nhận mẫu theo nhân viên' })
   @ApiParam({ name: 'staffId', description: 'ID nhân viên' })
@@ -68,6 +75,14 @@ export class SampleCollectionController {
   @ApiResponse({ status: 404, description: 'Không tìm thấy lệnh nhận mẫu' })
   findByCode(@Param('maLenh') maLenh: string) {
     return this.sampleCollectionService.findByCode(maLenh);
+  }
+
+  @Get(':id/history')
+  @ApiOperation({ summary: 'Lấy lịch sử tiến trình lệnh nhận mẫu' })
+  @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
+  @ApiResponse({ status: 200, description: 'Lịch sử tiến trình' })
+  getHistory(@Param('id') id: string) {
+    return this.sampleCollectionService.getHistory(id);
   }
 
   @Get(':id')
@@ -102,12 +117,29 @@ export class SampleCollectionController {
   @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
   @ApiResponse({ status: 200, description: 'Trạng thái đã được cập nhật' })
   @ApiResponse({ status: 404, description: 'Không tìm thấy lệnh nhận mẫu' })
-  updateStatus(
+  async updateStatus(
     @Param('id') id: string,
     @Body() data: UpdateSampleCollectionStatusDto
   ) {
     const { trangThai, ...additionalData } = data;
-    return this.sampleCollectionService.updateStatus(id, trangThai, additionalData);
+    const result = await this.sampleCollectionService.updateStatus(id, trangThai, additionalData);
+
+    // Trả về kết quả kèm thông tin email status nếu có
+    const response: any = result.toObject();
+    if ((additionalData as any).emailStatus) {
+      response.emailStatus = (additionalData as any).emailStatus;
+    }
+
+    return response;
+  }
+
+  @Post(':id/resend-email')
+  @ApiOperation({ summary: 'Gửi lại email thông báo' })
+  @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
+  @ApiResponse({ status: 200, description: 'Email đã được gửi lại' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy lệnh nhận mẫu' })
+  async resendEmail(@Param('id') id: string) {
+    return this.sampleCollectionService.resendCompletionEmail(id);
   }
 
   @Delete(':id')

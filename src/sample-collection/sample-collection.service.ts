@@ -2,12 +2,17 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { SampleCollection, SampleCollectionStatus } from './schemas/sample-collection.schema';
+import { SampleCollectionHistory } from './schemas/sample-collection-history.schema';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class SampleCollectionService {
   constructor(
     @InjectModel(SampleCollection.name)
     private sampleCollectionModel: Model<SampleCollection>,
+    @InjectModel(SampleCollectionHistory.name)
+    private sampleCollectionHistoryModel: Model<SampleCollectionHistory>,
+    private emailService: EmailService,
   ) { }
 
   async create(data: any): Promise<SampleCollection> {
@@ -55,6 +60,15 @@ export class SampleCollectionService {
     const saved = await sampleCollection.save();
     console.log('Saved sample collection:', saved);
 
+    // Lưu lịch sử: Tạo lệnh (không có trạng thái trước đó)
+    await this.saveHistory(
+      saved._id.toString(),
+      null, // Không có trạng thái trước
+      SampleCollectionStatus.CHO_DIEU_PHOI,
+      data.nguoiGiaoLenh,
+      'Tạo lệnh thu mẫu',
+    );
+
     return saved;
   }
 
@@ -92,7 +106,9 @@ export class SampleCollectionService {
   }
 
   async update(id: string, data: any): Promise<SampleCollection> {
-    return this.sampleCollectionModel
+    const oldData = await this.sampleCollectionModel.findById(id).exec();
+    
+    const result = await this.sampleCollectionModel
       .findByIdAndUpdate(id, data, { new: true })
       .populate('phongKham')
       .populate('noiDungCongViec')
@@ -100,10 +116,50 @@ export class SampleCollectionService {
       .populate('nhanVienThucHien')
       .populate('phongKhamKiemTra')
       .exec();
+
+    // Nếu có thay đổi trạng thái, lưu lịch sử
+    if (result && data.trangThai && oldData.trangThai !== data.trangThai) {
+      let ghiChu = '';
+      // Ưu tiên lấy nguoiThucHien từ data (người thực hiện thay đổi)
+      // Nếu không có thì lấy nhanVienThucHien (người được giao)
+      const nguoiThucHien = data.nguoiThucHien || result.nhanVienThucHien?._id?.toString();
+
+      switch (data.trangThai) {
+        case SampleCollectionStatus.CHO_DIEU_PHOI:
+          ghiChu = 'Chuyển về chờ điều phối';
+          break;
+        case SampleCollectionStatus.DANG_THUC_HIEN:
+          ghiChu = 'Bắt đầu thực hiện lệnh';
+          break;
+        case SampleCollectionStatus.HOAN_THANH:
+          ghiChu = 'Hoàn thành thu mẫu';
+          break;
+        case SampleCollectionStatus.HOAN_THANH_KIEM_TRA:
+          ghiChu = 'Hoàn thành kiểm tra';
+          break;
+        case SampleCollectionStatus.DA_HUY:
+          ghiChu = 'Hủy lệnh';
+          break;
+        default:
+          ghiChu = 'Cập nhật trạng thái';
+      }
+
+      await this.saveHistory(
+        id,
+        oldData.trangThai, // Trạng thái trước đó
+        data.trangThai as SampleCollectionStatus, // Trạng thái mới
+        nguoiThucHien,
+        ghiChu,
+      );
+    }
+
+    return result;
   }
 
   async assignStaff(id: string, nhanVienThucHien: string): Promise<SampleCollection> {
-    return this.sampleCollectionModel
+    const oldData = await this.sampleCollectionModel.findById(id).exec();
+    
+    const result = await this.sampleCollectionModel
       .findByIdAndUpdate(
         id,
         {
@@ -118,6 +174,19 @@ export class SampleCollectionService {
       .populate('nhanVienThucHien')
       .populate('phongKhamKiemTra')
       .exec();
+
+    // Lưu lịch sử: Điều phối lệnh
+    if (result) {
+      await this.saveHistory(
+        id,
+        oldData.trangThai, // Trạng thái trước đó
+        SampleCollectionStatus.DANG_THUC_HIEN, // Trạng thái mới
+        nhanVienThucHien,
+        'Điều phối lệnh cho nhân viên',
+      );
+    }
+
+    return result;
   }
 
   async updateStatus(
@@ -125,6 +194,7 @@ export class SampleCollectionService {
     trangThai: string,
     additionalData?: any
   ): Promise<SampleCollection> {
+    const oldData = await this.sampleCollectionModel.findById(id).exec();
     const updateData: any = { trangThai, ...additionalData };
 
     // Cập nhật thời gian hoàn thành
@@ -132,7 +202,7 @@ export class SampleCollectionService {
       updateData.thoiGianHoanThanh = new Date();
     }
 
-    return this.sampleCollectionModel
+    const result = await this.sampleCollectionModel
       .findByIdAndUpdate(id, updateData, { new: true })
       .populate('phongKham')
       .populate('noiDungCongViec')
@@ -140,6 +210,69 @@ export class SampleCollectionService {
       .populate('nhanVienThucHien')
       .populate('phongKhamKiemTra')
       .exec();
+
+    // Lưu lịch sử khi thay đổi trạng thái
+    if (result) {
+      let ghiChu = '';
+      // Ưu tiên lấy nguoiThucHien từ additionalData (người thực hiện thay đổi)
+      const nguoiThucHien = additionalData?.nguoiThucHien || result.nhanVienThucHien?._id?.toString();
+
+      switch (trangThai) {
+        case SampleCollectionStatus.DANG_THUC_HIEN:
+          ghiChu = 'Bắt đầu thực hiện lệnh';
+          break;
+        case SampleCollectionStatus.HOAN_THANH:
+          ghiChu = 'Hoàn thành thu mẫu';
+          break;
+        case SampleCollectionStatus.HOAN_THANH_KIEM_TRA:
+          ghiChu = 'Hoàn thành kiểm tra';
+          
+          // Gửi email cho phòng khám nếu có email
+          if (result.phongKham && (result.phongKham as any).email) {
+            const clinic = result.phongKham as any;
+            const employee = result.nhanVienThucHien as any;
+            const employeeName = employee?.hoTen || 'Nhân viên';
+            
+            const emailResult = await this.emailService.sendCompletionEmail(
+              clinic.email,
+              clinic.tenPhongKham,
+              result.maLenh,
+              new Date(),
+              employeeName,
+            );
+            
+            // Lưu kết quả gửi email vào additionalData để trả về cho frontend
+            if (!additionalData) additionalData = {};
+            additionalData.emailStatus = emailResult;
+            
+            console.log(`Email ${emailResult.success ? 'sent successfully' : 'failed'} to ${clinic.email} for order ${result.maLenh}`);
+          } else {
+            // Không có email phòng khám
+            if (!additionalData) additionalData = {};
+            additionalData.emailStatus = {
+              success: false,
+              message: 'Phòng khám chưa cấu hình địa chỉ email',
+            };
+          }
+          break;
+        case SampleCollectionStatus.DA_HUY:
+          ghiChu = 'Hủy lệnh';
+          break;
+        default:
+          ghiChu = 'Cập nhật trạng thái';
+      }
+
+      await this.saveHistory(
+        id,
+        oldData.trangThai, // Trạng thái trước đó
+        trangThai as SampleCollectionStatus, // Trạng thái mới
+        nguoiThucHien,
+        ghiChu,
+        additionalData,
+      );
+    }
+
+    return result;
   }
 
   async delete(id: string): Promise<SampleCollection> {
@@ -202,5 +335,82 @@ export class SampleCollectionService {
       data: collections,
       message: 'Data ready for export',
     };
+  }
+
+  // Lấy lịch sử tiến trình của lệnh
+  async getHistory(sampleCollectionId: string) {
+    return this.sampleCollectionHistoryModel
+      .find({ sampleCollectionId })
+      .sort({ thoiGian: 1 })
+      .populate('nguoiThucHien', 'hoTen maNhanVien')
+      .exec();
+  }
+
+  // Lưu lịch sử khi có thay đổi trạng thái
+  async saveHistory(
+    sampleCollectionId: string,
+    trangThaiTruoc: SampleCollectionStatus | null,
+    trangThai: SampleCollectionStatus,
+    nguoiThucHien?: string,
+    ghiChu?: string,
+    duLieuThayDoi?: any
+  ) {
+    const history = new this.sampleCollectionHistoryModel({
+      sampleCollectionId,
+      trangThaiTruoc, // Trạng thái trước đó
+      trangThai, // Trạng thái hiện tại
+      nguoiThucHien,
+      ghiChu,
+      thoiGian: new Date(),
+      duLieuThayDoi,
+    });
+    return history.save();
+  }
+
+  // Lấy tất cả lịch sử tiến trình (tất cả lệnh)
+  async getAllHistory(limit: number = 500) {
+    return this.sampleCollectionHistoryModel
+      .find()
+      .sort({ thoiGian: -1 })
+      .limit(limit)
+      .populate('sampleCollectionId', 'maLenh')
+      .populate('nguoiThucHien', 'hoTen maNhanVien')
+      .exec();
+  }
+
+  // Gửi lại email thông báo hoàn thành
+  async resendCompletionEmail(id: string) {
+    const collection = await this.sampleCollectionModel
+      .findById(id)
+      .populate('phongKham')
+      .populate('nhanVienThucHien')
+      .exec();
+
+    if (!collection) {
+      throw new Error('Không tìm thấy lệnh thu mẫu');
+    }
+
+    if (collection.trangThai !== SampleCollectionStatus.HOAN_THANH_KIEM_TRA) {
+      throw new Error('Lệnh chưa hoàn thành kiểm tra');
+    }
+
+    const clinic = collection.phongKham as any;
+    if (!clinic || !clinic.email) {
+      return {
+        success: false,
+        message: 'Phòng khám chưa cấu hình địa chỉ email',
+      };
+    }
+
+    const employee = collection.nhanVienThucHien as any;
+    const employeeName = employee?.hoTen || 'Nhân viên';
+
+    return await this.emailService.sendCompletionEmail(
+      clinic.email,
+      clinic.tenPhongKham,
+      collection.maLenh,
+      new Date(),
+      employeeName,
+    );
   }
 }
