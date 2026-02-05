@@ -30,7 +30,7 @@ Body:
 
 ### Truy cập ảnh
 
-Ảnh được lưu tại: `http://localhost:5000/uploads/sample-collections/{filename}`
+Ảnh được lưu tại: `http://localhost:5001/uploads/sample-collections/{filename}`
 
 ## Lưu ý
 

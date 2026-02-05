@@ -24,7 +24,7 @@ export class CreateSampleCollectionDto {
   @ApiPropertyOptional({ example: '507f1f77bcf86cd799439014', description: 'ID nhân viên thực hiện' })
   nhanVienThucHien?: string;
 
-  @ApiPropertyOptional({ example: 50000, description: 'Số tiền cước nhận mẫu', default: 0 })
+  @ApiPropertyOptional({ example: 50010, description: 'Số tiền cước nhận mẫu', default: 0 })
   soTienCuocNhanMau?: number;
 
   @ApiPropertyOptional({ example: 30000, description: 'Số tiền ship', default: 0 })

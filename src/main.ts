@@ -40,9 +40,9 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, document);
 
-  await app.listen(5000);
-  console.log('🚀 Backend is running on http://localhost:5000');
-  console.log('📚 Swagger documentation available at http://localhost:5000/api-docs');
+  await app.listen(5001);
+  console.log('🚀 Backend is running on http://localhost:5001');
+  console.log('📚 Swagger documentation available at http://localhost:5001/api-docs');
 }
 
 bootstrap();
