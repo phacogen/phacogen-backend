@@ -5,6 +5,7 @@ import { SampleCollectionService } from './sample-collection.service';
 import { SampleCollection, SampleCollectionSchema } from './schemas/sample-collection.schema';
 import { SampleCollectionHistory, SampleCollectionHistorySchema } from './schemas/sample-collection-history.schema';
 import { EmailModule } from '../email/email.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { EmailModule } from '../email/email.module';
       { name: SampleCollectionHistory.name, schema: SampleCollectionHistorySchema },
     ]),
     EmailModule,
+    NotificationModule,
   ],
   controllers: [SampleCollectionController],
   providers: [SampleCollectionService],

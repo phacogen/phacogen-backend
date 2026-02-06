@@ -10,6 +10,8 @@ import { UserModule } from './user/user.module';
 import { EmailModule } from './email/email.module';
 import { WorkScheduleModule } from './work-schedule/work-schedule.module';
 import { WorkContentModule } from './work-content/work-content.module';
+import { NotificationModule } from './notification/notification.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -26,6 +28,7 @@ import { WorkContentModule } from './work-content/work-content.module';
     EmailModule,
     WorkScheduleModule,
     WorkContentModule,
+    NotificationModule,
   ],
 })
 export class AppModule { }

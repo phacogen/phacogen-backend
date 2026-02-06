@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { EmailService } from '../email/email.service';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationType } from '../notification/schemas/notification.schema';
+import { User } from '../user/schemas/user.schema';
 import { SampleCollectionHistory } from './schemas/sample-collection-history.schema';
 import { SampleCollection, SampleCollectionStatus } from './schemas/sample-collection.schema';
 
@@ -12,7 +15,10 @@ export class SampleCollectionService {
     private sampleCollectionModel: Model<SampleCollection>,
     @InjectModel(SampleCollectionHistory.name)
     private sampleCollectionHistoryModel: Model<SampleCollectionHistory>,
+    @InjectModel(User.name)
+    private userModel: Model<User>,
     private emailService: EmailService,
+    private notificationService: NotificationService,
   ) { }
 
   async create(data: any): Promise<SampleCollection> {
@@ -68,6 +74,17 @@ export class SampleCollectionService {
       data.nguoiGiaoLenh,
       'Tạo lệnh thu mẫu',
     );
+
+    // Tạo thông báo cho người được giao (nếu có)
+    if (data.nhanVienThucHien) {
+      await this.notificationService.create({
+        userId: data.nhanVienThucHien,
+        title: 'Lệnh thu mẫu mới',
+        message: `Bạn được giao lệnh thu mẫu ${maLenh}`,
+        type: NotificationType.ORDER_ASSIGNED,
+        relatedOrderId: saved._id.toString(),
+      });
+    }
 
     return saved;
   }
@@ -151,6 +168,18 @@ export class SampleCollectionService {
         nguoiThucHien,
         ghiChu,
       );
+    }
+
+    // Nếu có giao nhân viên mới, tạo thông báo
+    if (result && data.nhanVienThucHien && oldData.nhanVienThucHien?.toString() !== data.nhanVienThucHien) {
+      await this.notificationService.create({
+        userId: data.nhanVienThucHien,
+        title: 'Lệnh thu mẫu mới',
+        message: `Bạn được giao lệnh thu mẫu ${result.maLenh}`,
+        type: NotificationType.ORDER_ASSIGNED,
+        relatedOrderId: id,
+      });
+      console.log(`Notification created for user ${data.nhanVienThucHien} for order ${result.maLenh}`);
     }
 
     return result;
@@ -270,6 +299,21 @@ export class SampleCollectionService {
         ghiChu,
         additionalData,
       );
+
+      // Tạo thông báo cho người giao lệnh khi trạng thái thay đổi
+      if (result.nguoiGiaoLenh) {
+        const nguoiGiaoLenhId = typeof result.nguoiGiaoLenh === 'object' 
+          ? (result.nguoiGiaoLenh as any)._id 
+          : result.nguoiGiaoLenh;
+
+        await this.notificationService.create({
+          userId: nguoiGiaoLenhId.toString(),
+          title: 'Cập nhật trạng thái lệnh',
+          message: `Lệnh ${result.maLenh} đã chuyển sang trạng thái: ${ghiChu}`,
+          type: NotificationType.ORDER_STATUS_CHANGED,
+          relatedOrderId: id,
+        });
+      }
     }
 
     return result;
