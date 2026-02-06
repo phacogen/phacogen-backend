@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { EmailService } from '../email/email.service';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType } from '../notification/schemas/notification.schema';
@@ -110,6 +111,76 @@ export class SampleCollectionService {
       .populate('nhanVienThucHien')
       .populate('phongKhamKiemTra')
       .exec();
+  }
+
+  async findAllWithPagination(params: {
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    data: SampleCollection[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const { status, search, page = 1, limit = 10 } = params;
+    
+    // Build query filter
+    const filter: any = {};
+    
+    // Filter by status
+    if (status) {
+      filter.trangThai = status;
+    }
+    
+    // Search by maLenh or noiDungCongViec
+    if (search) {
+      filter.$or = [
+        { maLenh: { $regex: search, $options: 'i' } }, // Case-insensitive search
+      ];
+      
+      // Nếu search có thể là ObjectId, tìm theo noiDungCongViec
+      // Nhưng vì noiDungCongViec là reference, ta cần populate trước
+      // Để đơn giản, ta sẽ tìm work content trước
+      const workContents = await this.sampleCollectionModel.db.collection('workcontents').find({
+        tenCongViec: { $regex: search, $options: 'i' }
+      }).toArray();
+      
+      if (workContents.length > 0) {
+        filter.$or.push({
+          noiDungCongViec: { $in: workContents.map(wc => wc._id) }
+        });
+      }
+    }
+    
+    // Calculate skip
+    const skip = (page - 1) * limit;
+    
+    // Get total count
+    const total = await this.sampleCollectionModel.countDocuments(filter).exec();
+    
+    // Get paginated data
+    const data = await this.sampleCollectionModel
+      .find(filter)
+      .populate('phongKham')
+      .populate('noiDungCongViec')
+      .populate('nguoiGiaoLenh')
+      .populate('nhanVienThucHien')
+      .populate('phongKhamKiemTra')
+      .sort({ createdAt: -1 }) // Newest first
+      .skip(skip)
+      .limit(limit)
+      .exec();
+    
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async findOne(id: string): Promise<SampleCollection> {
@@ -610,5 +681,88 @@ export class SampleCollectionService {
       employeeStats,
       statusDistribution,
     };
+  }
+
+  // Tìm các lệnh quá hạn
+  async findOverdueOrders(): Promise<SampleCollection[]> {
+    const now = new Date();
+    
+    // Tìm các lệnh có:
+    // - Hạn hoàn thành < hiện tại
+    // - Trạng thái khác HOAN_THANH_KIEM_TRA và DA_HUY
+    return this.sampleCollectionModel
+      .find({
+        thoiGianHenHoanThanh: { $lt: now },
+        trangThai: { 
+          $nin: [
+            SampleCollectionStatus.HOAN_THANH_KIEM_TRA,
+            SampleCollectionStatus.DA_HUY
+          ] 
+        },
+      })
+      .populate('nguoiGiaoLenh')
+      .populate('nhanVienThucHien')
+      .exec();
+  }
+
+  // Gửi thông báo cho các lệnh quá hạn
+  async sendOverdueNotifications() {
+    const overdueOrders = await this.findOverdueOrders();
+    
+    if (overdueOrders.length === 0) {
+      console.log('No overdue orders found');
+      return;
+    }
+
+    console.log(`Found ${overdueOrders.length} overdue orders`);
+
+    for (const order of overdueOrders) {
+      // Kiểm tra xem đã gửi thông báo quá hạn chưa
+      const existingNotification = await this.notificationService['notificationModel']
+        .findOne({
+          relatedOrderId: order._id.toString(),
+          type: NotificationType.ORDER_OVERDUE,
+        })
+        .exec();
+
+      // Nếu đã gửi thông báo quá hạn rồi thì bỏ qua
+      if (existingNotification) {
+        continue;
+      }
+
+      const recipientIds = new Set<string>();
+
+      // 1. Người được giao
+      if (order.nhanVienThucHien) {
+        const nhanVienId = typeof order.nhanVienThucHien === 'object'
+          ? (order.nhanVienThucHien as any)._id.toString()
+          : (order.nhanVienThucHien as any).toString();
+        recipientIds.add(nhanVienId);
+      }
+
+      // 2. Tất cả Admin
+      const admins = await this.getAdminUsers();
+      admins.forEach(admin => recipientIds.add(admin._id.toString()));
+
+      // Gửi thông báo cho tất cả người nhận
+      for (const userId of recipientIds) {
+        await this.notificationService.create({
+          userId,
+          title: 'Lệnh thu mẫu quá hạn',
+          message: `Lệnh ${order.maLenh} đã quá hạn hoàn thành`,
+          type: NotificationType.ORDER_OVERDUE,
+          relatedOrderId: order._id.toString(),
+        });
+      }
+
+      console.log(`Sent overdue notifications for order ${order.maLenh} to ${recipientIds.size} users`);
+    }
+  }
+
+  // Cron job chạy mỗi giờ để kiểm tra lệnh quá hạn
+  @Cron(CronExpression.EVERY_HOUR)
+  async handleOverdueCheck() {
+    console.log('Running overdue check...');
+    await this.sendOverdueNotifications();
   }
 }

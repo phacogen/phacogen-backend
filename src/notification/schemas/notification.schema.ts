@@ -7,6 +7,7 @@ export enum NotificationType {
   ORDER_ASSIGNED = 'ORDER_ASSIGNED',
   ORDER_STATUS_CHANGED = 'ORDER_STATUS_CHANGED',
   ORDER_CREATED = 'ORDER_CREATED',
+  ORDER_OVERDUE = 'ORDER_OVERDUE',
 }
 
 @Schema({ timestamps: true })

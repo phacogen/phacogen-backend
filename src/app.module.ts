@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
 import { ClinicModule } from './clinic/clinic.module';
 import { OrderModule } from './order/order.module';
@@ -11,6 +12,7 @@ import { EmailModule } from './email/email.module';
 import { WorkScheduleModule } from './work-schedule/work-schedule.module';
 import { WorkContentModule } from './work-content/work-content.module';
 import { NotificationModule } from './notification/notification.module';
+import { SupplyModule } from './supply/supply.module';
 
 @Module({
   imports: [
@@ -18,6 +20,7 @@ import { NotificationModule } from './notification/notification.module';
       isGlobal: true, // Makes ConfigModule available globally
       envFilePath: '.env', // Path to .env file
     }),
+    ScheduleModule.forRoot(), // Enable scheduled tasks
     MongooseModule.forRoot(process.env.MONGODB_URI || 'mongodb+srv://uyenptforimex_db_user:Ptuylht090821@cluster0.z6zymcn.mongodb.net/thumauxetnghiem?retryWrites=true&w=majority'),
     AuthModule,
     UserModule,
@@ -29,6 +32,7 @@ import { NotificationModule } from './notification/notification.module';
     WorkScheduleModule,
     WorkContentModule,
     NotificationModule,
+    SupplyModule,
   ],
 })
 export class AppModule { }

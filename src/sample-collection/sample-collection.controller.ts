@@ -23,12 +23,27 @@ export class SampleCollectionController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Lấy danh sách lệnh nhận mẫu' })
+  @ApiOperation({ summary: 'Lấy danh sách lệnh nhận mẫu với phân trang và tìm kiếm' })
   @ApiQuery({ name: 'status', description: 'Lọc theo trạng thái', required: false, enum: ['CHO_DIEU_PHOI', 'CHO_NHAN_LENH', 'DANG_THUC_HIEN', 'HOAN_THANH', 'DA_HUY'] })
+  @ApiQuery({ name: 'search', description: 'Tìm kiếm theo mã lệnh hoặc nội dung công việc', required: false })
+  @ApiQuery({ name: 'page', description: 'Số trang (bắt đầu từ 1)', required: false, type: Number })
+  @ApiQuery({ name: 'limit', description: 'Số lượng mỗi trang', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Danh sách lệnh nhận mẫu' })
-  findAll(@Query('status') status?: string) {
-    const filter = status ? { trangThai: status } : {};
-    return this.sampleCollectionService.findAll(filter);
+  findAll(
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : undefined;
+    const limitNum = limit ? parseInt(limit, 10) : undefined;
+    
+    return this.sampleCollectionService.findAllWithPagination({
+      status,
+      search,
+      page: pageNum,
+      limit: limitNum,
+    });
   }
 
   @Get('export/excel')

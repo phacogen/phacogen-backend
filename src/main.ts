@@ -35,6 +35,7 @@ async function bootstrap() {
     .addTag('sample-collections', 'Sample collection management endpoints')
     .addTag('work-schedules', 'Work schedule management endpoints')
     .addTag('work-contents', 'Work content management endpoints')
+    .addTag('supply', 'Supply and allocation management endpoints')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
