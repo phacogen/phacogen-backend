@@ -16,12 +16,18 @@ export class NotificationService {
     return notification.save();
   }
 
-  async findByUserId(userId: string): Promise<Notification[]> {
-    return this.notificationModel
+  async findByUserId(userId: string): Promise<any[]> {
+    const notifications = await this.notificationModel
       .find({ userId })
       .sort({ createdAt: -1 })
-      .populate('relatedOrderId')
+      .lean()
       .exec();
+    
+    // Convert relatedOrderId từ ObjectId sang string
+    return notifications.map(notification => ({
+      ...notification,
+      relatedOrderId: notification.relatedOrderId?.toString(),
+    }));
   }
 
   async getUnreadCount(userId: string): Promise<number> {

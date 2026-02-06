@@ -75,18 +75,30 @@ export class SampleCollectionService {
       'Tạo lệnh thu mẫu',
     );
 
-    // Tạo thông báo cho người được giao (nếu có)
-    if (data.nhanVienThucHien) {
+    // Tạo thông báo CHỈ cho Admin khi tạo lệnh mới
+    const admins = await this.getAdminUsers();
+    for (const admin of admins) {
       await this.notificationService.create({
-        userId: data.nhanVienThucHien,
+        userId: admin._id.toString(),
         title: 'Lệnh thu mẫu mới',
-        message: `Bạn được giao lệnh thu mẫu ${maLenh}`,
+        message: `Lệnh thu mẫu ${maLenh} đã được tạo`,
         type: NotificationType.ORDER_ASSIGNED,
         relatedOrderId: saved._id.toString(),
       });
     }
 
     return saved;
+  }
+
+  // Helper method để lấy danh sách Admin
+  private async getAdminUsers(): Promise<User[]> {
+    const users = await this.userModel.find().populate('vaiTro').exec();
+    return users.filter(user => {
+      if (user.vaiTro && typeof user.vaiTro === 'object') {
+        return (user.vaiTro as any).tenVaiTro === 'Admin';
+      }
+      return false;
+    });
   }
 
   async findAll(filter: any = {}): Promise<SampleCollection[]> {
@@ -168,21 +180,81 @@ export class SampleCollectionService {
         nguoiThucHien,
         ghiChu,
       );
+
+      // Gửi thông báo khi thay đổi trạng thái
+      await this.sendStatusChangeNotifications(result, ghiChu);
     }
 
-    // Nếu có giao nhân viên mới, tạo thông báo
+    // Nếu có giao nhân viên mới (điều phối lệnh)
     if (result && data.nhanVienThucHien && oldData.nhanVienThucHien?.toString() !== data.nhanVienThucHien) {
-      await this.notificationService.create({
-        userId: data.nhanVienThucHien,
-        title: 'Lệnh thu mẫu mới',
-        message: `Bạn được giao lệnh thu mẫu ${result.maLenh}`,
-        type: NotificationType.ORDER_ASSIGNED,
-        relatedOrderId: id,
-      });
-      console.log(`Notification created for user ${data.nhanVienThucHien} for order ${result.maLenh}`);
+      // Gửi thông báo cho: người được giao, người tạo lệnh, và Admin
+      const recipientIds = new Set<string>();
+      
+      // 1. Người được giao
+      recipientIds.add(data.nhanVienThucHien);
+      
+      // 2. Người tạo lệnh
+      if (result.nguoiGiaoLenh) {
+        const nguoiGiaoLenhId = typeof result.nguoiGiaoLenh === 'object' 
+          ? (result.nguoiGiaoLenh as any)._id.toString()
+          : (result.nguoiGiaoLenh as any).toString();
+        recipientIds.add(nguoiGiaoLenhId);
+      }
+      
+      // 3. Tất cả Admin
+      const admins = await this.getAdminUsers();
+      admins.forEach(admin => recipientIds.add(admin._id.toString()));
+
+      // Gửi thông báo cho tất cả người nhận
+      for (const userId of recipientIds) {
+        await this.notificationService.create({
+          userId,
+          title: 'Điều phối lệnh thu mẫu',
+          message: `Lệnh thu mẫu ${result.maLenh} đã được điều phối`,
+          type: NotificationType.ORDER_ASSIGNED,
+          relatedOrderId: id,
+        });
+      }
+      console.log(`Notifications sent for order assignment ${result.maLenh} to ${recipientIds.size} users`);
     }
 
     return result;
+  }
+
+  // Helper method để gửi thông báo khi thay đổi trạng thái
+  private async sendStatusChangeNotifications(order: SampleCollection, ghiChu: string) {
+    const recipientIds = new Set<string>();
+
+    // 1. Người tạo lệnh
+    if (order.nguoiGiaoLenh) {
+      const nguoiGiaoLenhId = typeof order.nguoiGiaoLenh === 'object' 
+        ? (order.nguoiGiaoLenh as any)._id.toString()
+        : (order.nguoiGiaoLenh as any).toString();
+      recipientIds.add(nguoiGiaoLenhId);
+    }
+
+    // 2. Người được giao
+    if (order.nhanVienThucHien) {
+      const nhanVienThucHienId = typeof order.nhanVienThucHien === 'object'
+        ? (order.nhanVienThucHien as any)._id.toString()
+        : (order.nhanVienThucHien as any).toString();
+      recipientIds.add(nhanVienThucHienId);
+    }
+
+    // 3. Tất cả Admin
+    const admins = await this.getAdminUsers();
+    admins.forEach(admin => recipientIds.add(admin._id.toString()));
+
+    // Gửi thông báo cho tất cả người nhận
+    for (const userId of recipientIds) {
+      await this.notificationService.create({
+        userId,
+        title: 'Cập nhật trạng thái lệnh',
+        message: `Lệnh ${order.maLenh} đã chuyển sang trạng thái: ${ghiChu}`,
+        type: NotificationType.ORDER_STATUS_CHANGED,
+        relatedOrderId: order._id.toString(),
+      });
+    }
   }
 
   async assignStaff(id: string, nhanVienThucHien: string): Promise<SampleCollection> {
@@ -300,20 +372,8 @@ export class SampleCollectionService {
         additionalData,
       );
 
-      // Tạo thông báo cho người giao lệnh khi trạng thái thay đổi
-      if (result.nguoiGiaoLenh) {
-        const nguoiGiaoLenhId = typeof result.nguoiGiaoLenh === 'object' 
-          ? (result.nguoiGiaoLenh as any)._id 
-          : result.nguoiGiaoLenh;
-
-        await this.notificationService.create({
-          userId: nguoiGiaoLenhId.toString(),
-          title: 'Cập nhật trạng thái lệnh',
-          message: `Lệnh ${result.maLenh} đã chuyển sang trạng thái: ${ghiChu}`,
-          type: NotificationType.ORDER_STATUS_CHANGED,
-          relatedOrderId: id,
-        });
-      }
+      // Gửi thông báo cho tất cả người liên quan
+      await this.sendStatusChangeNotifications(result, ghiChu);
     }
 
     return result;
