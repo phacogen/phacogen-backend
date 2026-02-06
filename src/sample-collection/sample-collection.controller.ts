@@ -45,6 +45,27 @@ export class SampleCollectionController {
     return this.sampleCollectionService.getStatsSummary();
   }
 
+  @Get('stats/dashboard')
+  @ApiOperation({ summary: 'Lấy thống kê cho Dashboard với filter' })
+  @ApiQuery({ name: 'status', description: 'Lọc theo trạng thái', required: false })
+  @ApiQuery({ name: 'employeeId', description: 'Lọc theo nhân viên', required: false })
+  @ApiQuery({ name: 'startDate', description: 'Từ ngày (ISO format)', required: false })
+  @ApiQuery({ name: 'endDate', description: 'Đến ngày (ISO format)', required: false })
+  @ApiResponse({ status: 200, description: 'Thống kê Dashboard' })
+  getDashboardStats(
+    @Query('status') status?: string,
+    @Query('employeeId') employeeId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.sampleCollectionService.getDashboardStats({
+      status,
+      employeeId,
+      startDate,
+      endDate,
+    });
+  }
+
   @Get('history/all')
   @ApiOperation({ summary: 'Lấy tất cả lịch sử tiến trình (tất cả lệnh)' })
   @ApiResponse({ status: 200, description: 'Danh sách lịch sử tiến trình' })

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { WorkSchedule } from './schemas/work-schedule.schema';
+import { SetScheduleDto } from './dto/set-schedule.dto';
 
 @Injectable()
 export class WorkScheduleService {
@@ -10,7 +11,8 @@ export class WorkScheduleService {
     private workScheduleModel: Model<WorkSchedule>,
   ) {}
 
-  async setSchedule(userId: string, date: string, caLamViec: string): Promise<WorkSchedule> {
+  async setSchedule(data: SetScheduleDto): Promise<WorkSchedule> {
+    const { userId, date, caLamViec } = data;
     return this.workScheduleModel.findOneAndUpdate(
       { userId, date },
       { userId, date, caLamViec },

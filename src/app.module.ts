@@ -7,10 +7,9 @@ import { OrderModule } from './order/order.module';
 import { RoleModule } from './role/role.module';
 import { SampleCollectionModule } from './sample-collection/sample-collection.module';
 import { UserModule } from './user/user.module';
-import { WorkContentModule } from './work-content/work-content.module';
-import { WorkScheduleModule } from './work-schedule/work-schedule.module';
 import { EmailModule } from './email/email.module';
-
+import { WorkScheduleModule } from './work-schedule/work-schedule.module';
+import { WorkContentModule } from './work-content/work-content.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -22,11 +21,11 @@ import { EmailModule } from './email/email.module';
     UserModule,
     RoleModule,
     ClinicModule,
-    WorkContentModule,
     SampleCollectionModule,
     OrderModule,
-    WorkScheduleModule,
     EmailModule,
+    WorkScheduleModule,
+    WorkContentModule,
   ],
 })
 export class AppModule { }

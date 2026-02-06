@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { SampleCollection, SampleCollectionStatus } from './schemas/sample-collection.schema';
-import { SampleCollectionHistory } from './schemas/sample-collection-history.schema';
 import { EmailService } from '../email/email.service';
+import { SampleCollectionHistory } from './schemas/sample-collection-history.schema';
+import { SampleCollection, SampleCollectionStatus } from './schemas/sample-collection.schema';
 
 @Injectable()
 export class SampleCollectionService {
@@ -107,7 +107,7 @@ export class SampleCollectionService {
 
   async update(id: string, data: any): Promise<SampleCollection> {
     const oldData = await this.sampleCollectionModel.findById(id).exec();
-    
+
     const result = await this.sampleCollectionModel
       .findByIdAndUpdate(id, data, { new: true })
       .populate('phongKham')
@@ -158,7 +158,7 @@ export class SampleCollectionService {
 
   async assignStaff(id: string, nhanVienThucHien: string): Promise<SampleCollection> {
     const oldData = await this.sampleCollectionModel.findById(id).exec();
-    
+
     const result = await this.sampleCollectionModel
       .findByIdAndUpdate(
         id,
@@ -226,13 +226,13 @@ export class SampleCollectionService {
           break;
         case SampleCollectionStatus.HOAN_THANH_KIEM_TRA:
           ghiChu = 'Hoàn thành kiểm tra';
-          
+
           // Gửi email cho phòng khám nếu có email
           if (result.phongKham && (result.phongKham as any).email) {
             const clinic = result.phongKham as any;
             const employee = result.nhanVienThucHien as any;
             const employeeName = employee?.hoTen || 'Nhân viên';
-            
+
             const emailResult = await this.emailService.sendCompletionEmail(
               clinic.email,
               clinic.tenPhongKham,
@@ -240,11 +240,11 @@ export class SampleCollectionService {
               new Date(),
               employeeName,
             );
-            
+
             // Lưu kết quả gửi email vào additionalData để trả về cho frontend
             if (!additionalData) additionalData = {};
             additionalData.emailStatus = emailResult;
-            
+
             console.log(`Email ${emailResult.success ? 'sent successfully' : 'failed'} to ${clinic.email} for order ${result.maLenh}`);
           } else {
             // Không có email phòng khám
@@ -412,5 +412,99 @@ export class SampleCollectionService {
       new Date(),
       employeeName,
     );
+  }
+  async getDashboardStats(filters: {
+    status?: string;
+    employeeId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any> {
+    // Build query filter
+    const query: any = {};
+
+    if (filters.status) {
+      query.trangThai = filters.status;
+    }
+
+    if (filters.employeeId) {
+      query.nhanVienThucHien = filters.employeeId;
+    }
+
+    if (filters.startDate || filters.endDate) {
+      query.createdAt = {};
+      if (filters.startDate) {
+        query.createdAt.$gte = new Date(filters.startDate);
+      }
+      if (filters.endDate) {
+        const endDate = new Date(filters.endDate);
+        endDate.setHours(23, 59, 59, 999); // End of day
+        query.createdAt.$lte = endDate;
+      }
+    }
+
+    // Fetch filtered collections
+    const collections = await this.sampleCollectionModel
+      .find(query)
+      .populate('nhanVienThucHien', 'hoTen _id')
+      .exec();
+
+    // Calculate summary stats
+    const tongSoLenh = collections.length;
+    const tongTienCuocNhanMau = collections.reduce((sum, c) => sum + (c.soTienCuocNhanMau || 0), 0);
+    const tongTienShip = collections.reduce((sum, c) => sum + (c.soTienShip || 0), 0);
+    const tongTienGuiXe = collections.reduce((sum, c) => sum + (c.soTienGuiXe || 0), 0);
+
+    // Calculate employee stats
+    const employeeMap = new Map<string, { name: string; count: number }>();
+    collections.forEach((c) => {
+      if (c.nhanVienThucHien) {
+        const employee = c.nhanVienThucHien as any;
+        const id = employee._id.toString();
+        const name = employee.hoTen;
+        if (employeeMap.has(id)) {
+          employeeMap.get(id)!.count++;
+        } else {
+          employeeMap.set(id, { name, count: 1 });
+        }
+      }
+    });
+
+    const employeeStats = Array.from(employeeMap.values()).map((v) => ({
+      tenNhanVien: v.name,
+      soLenh: v.count,
+    }));
+
+    // Calculate status distribution
+    const statusMap = new Map<string, number>();
+    collections.forEach((c) => {
+      const status = c.trangThai;
+      statusMap.set(status, (statusMap.get(status) || 0) + 1);
+    });
+
+    const statusLabels: Record<string, string> = {
+      CHO_DIEU_PHOI: 'Chờ điều phối',
+      DANG_THUC_HIEN: 'Đang thực hiện',
+      HOAN_THANH: 'Hoàn thành',
+      HOAN_THANH_KIEM_TRA: 'Hoàn thành kiểm tra',
+      DA_HUY: 'Đã hủy',
+    };
+
+    const statusDistribution = Array.from(statusMap.entries()).map(([status, count]) => ({
+      trangThai: statusLabels[status] || status,
+      soLuong: count,
+      tiLe: tongSoLenh > 0 ? Math.round((count / tongSoLenh) * 100) : 0,
+    }));
+
+    return {
+      summary: {
+        tongSoLenh,
+        tongTienCuocNhanMau,
+        tongTienShip,
+        tongTienGuiXe,
+        tongTatCa: tongTienCuocNhanMau + tongTienShip + tongTienGuiXe,
+      },
+      employeeStats,
+      statusDistribution,
+    };
   }
 }
