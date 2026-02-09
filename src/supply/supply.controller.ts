@@ -11,17 +11,21 @@ import { ConfirmDeliveryDto } from './dto/confirm-delivery.dto';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { PrepareAllocationDto } from './dto/prepare-allocation.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Permissions } from '../auth/decorators/permissions.decorator';
+import { Permission } from '../role/schemas/role.schema';
 
 @ApiTags('supply')
 @ApiBearerAuth('JWT-auth')
 @Controller('supply')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class SupplyController {
   constructor(private readonly supplyService: SupplyService) {}
 
   // ============ UPLOAD ẢNH ============
 
   @Post('upload-image')
+  @Permissions(Permission.SUPPLY_CREATE, Permission.SUPPLY_UPDATE)
   @ApiOperation({ summary: 'Upload hình ảnh vật tư' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -65,6 +69,7 @@ export class SupplyController {
   }
 
   @Post('allocations/:id/upload-delivery-image')
+  @Permissions(Permission.ALLOCATION_UPDATE)
   @ApiOperation({ summary: 'Upload hình ảnh giao nhận' })
   @ApiParam({ name: 'id', description: 'ID phiếu cấp phát' })
   @ApiConsumes('multipart/form-data')

@@ -319,10 +319,6 @@ export class SupplyService {
     startDate?: string;
     endDate?: string;
   }): Promise<SupplyHistoryDocument[]> {
-    console.log('=== Getting history for supply ===');
-    console.log('Supply ID:', supplyId);
-    console.log('Supply ID type:', typeof supplyId);
-    
     // Convert string to ObjectId for proper MongoDB query
     const objectId = new Types.ObjectId(supplyId);
     
@@ -340,27 +336,12 @@ export class SupplyService {
       }
     }
 
-    console.log('History filter:', JSON.stringify(filter));
-
-    // First, let's check total count in collection
-    const totalCount = await this.historyModel.countDocuments({}).exec();
-    console.log('Total history records in DB:', totalCount);
-
-    // Check if any records exist for this supply (try both string and ObjectId)
-    const countWithString = await this.historyModel.countDocuments({ vatTu: supplyId }).exec();
-    const countWithObjectId = await this.historyModel.countDocuments({ vatTu: objectId }).exec();
-    console.log('Count with string ID:', countWithString);
-    console.log('Count with ObjectId:', countWithObjectId);
-
     const history = await this.historyModel
       .find(filter)
       .populate('nguoiThucHien', 'hoTen')
       .populate('phieuCapPhat', 'maPhieu')
       .sort({ thoiGian: -1 })
       .exec();
-
-    console.log('History found:', history.length, 'records');
-    console.log('=== End history query ===');
     
     return history;
   }

@@ -1,14 +1,21 @@
-import { Controller, Get, Post, Delete, Param, Body } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Get, Post, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Permissions } from '../auth/decorators/permissions.decorator';
+import { Permission } from '../role/schemas/role.schema';
 
 @ApiTags('notifications')
+@ApiBearerAuth()
 @Controller('notifications')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 
   @Post()
+  @Permissions(Permission.NOTIFICATION_CREATE)
   @ApiOperation({ summary: 'Tạo thông báo mới' })
   @ApiResponse({ status: 201, description: 'Thông báo đã được tạo' })
   create(@Body() createNotificationDto: CreateNotificationDto) {

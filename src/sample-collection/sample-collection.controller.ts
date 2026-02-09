@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UploadedFiles, UseInterceptors, UseGuards } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { AssignStaffDto } from './dto/assign-staff.dto';
@@ -8,13 +8,20 @@ import { CreateSampleCollectionDto } from './dto/create-sample-collection.dto';
 import { UpdateSampleCollectionDto } from './dto/update-sample-collection.dto';
 import { UpdateSampleCollectionStatusDto } from './dto/update-status.dto';
 import { SampleCollectionService } from './sample-collection.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Permissions } from '../auth/decorators/permissions.decorator';
+import { Permission } from '../role/schemas/role.schema';
 
 @ApiTags('sample-collections')
+@ApiBearerAuth()
 @Controller('sample-collections')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class SampleCollectionController {
   constructor(private readonly sampleCollectionService: SampleCollectionService) { }
 
   @Post()
+  @Permissions(Permission.ORDER_CREATE)
   @ApiOperation({ summary: 'Tạo lệnh nhận mẫu mới' })
   @ApiResponse({ status: 201, description: 'Lệnh nhận mẫu đã được tạo thành công' })
   @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
@@ -23,6 +30,7 @@ export class SampleCollectionController {
   }
 
   @Get()
+  @Permissions(Permission.ORDER_VIEW)
   @ApiOperation({ summary: 'Lấy danh sách lệnh nhận mẫu với phân trang và tìm kiếm' })
   @ApiQuery({ name: 'status', description: 'Lọc theo trạng thái', required: false, enum: ['CHO_DIEU_PHOI', 'CHO_NHAN_LENH', 'DANG_THUC_HIEN', 'HOAN_THANH', 'DA_HUY'] })
   @ApiQuery({ name: 'search', description: 'Tìm kiếm theo mã lệnh hoặc nội dung công việc', required: false })
@@ -122,6 +130,7 @@ export class SampleCollectionController {
   }
 
   @Get(':id')
+  @Permissions(Permission.ORDER_DETAIL_VIEW)
   @ApiOperation({ summary: 'Lấy thông tin lệnh nhận mẫu theo ID' })
   @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
   @ApiResponse({ status: 200, description: 'Thông tin lệnh nhận mẫu' })
@@ -131,6 +140,7 @@ export class SampleCollectionController {
   }
 
   @Put(':id')
+  @Permissions(Permission.ORDER_UPDATE)
   @ApiOperation({ summary: 'Cập nhật thông tin lệnh nhận mẫu' })
   @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
   @ApiResponse({ status: 200, description: 'Lệnh nhận mẫu đã được cập nhật' })
@@ -140,6 +150,7 @@ export class SampleCollectionController {
   }
 
   @Put(':id/assign')
+  @Permissions(Permission.ORDER_ASSIGN)
   @ApiOperation({ summary: 'Phân công nhân viên thực hiện' })
   @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
   @ApiResponse({ status: 200, description: 'Đã phân công thành công' })
@@ -149,6 +160,7 @@ export class SampleCollectionController {
   }
 
   @Put(':id/status')
+  @Permissions(Permission.ORDER_UPDATE)
   @ApiOperation({ summary: 'Cập nhật trạng thái lệnh nhận mẫu' })
   @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
   @ApiResponse({ status: 200, description: 'Trạng thái đã được cập nhật' })
@@ -170,6 +182,7 @@ export class SampleCollectionController {
   }
 
   @Post(':id/resend-email')
+  @Permissions(Permission.ORDER_UPDATE)
   @ApiOperation({ summary: 'Gửi lại email thông báo' })
   @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
   @ApiResponse({ status: 200, description: 'Email đã được gửi lại' })
@@ -179,6 +192,7 @@ export class SampleCollectionController {
   }
 
   @Delete(':id')
+  @Permissions(Permission.ORDER_DELETE)
   @ApiOperation({ summary: 'Xóa lệnh nhận mẫu' })
   @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
   @ApiResponse({ status: 200, description: 'Lệnh nhận mẫu đã được xóa' })

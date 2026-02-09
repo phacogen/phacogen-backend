@@ -1,16 +1,22 @@
-import { Controller, Get, Post, Put, Delete, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
 import { RoleService } from './role.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Permissions } from '../auth/decorators/permissions.decorator';
+import { Permission } from './schemas/role.schema';
 
 @ApiTags('roles')
 @ApiBearerAuth('JWT-auth')
 @Controller('roles')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class RoleController {
   constructor(private readonly roleService: RoleService) {}
 
   @Post()
+  @Permissions(Permission.ROLE_CREATE)
   @ApiOperation({ summary: 'Tạo vai trò mới' })
   @ApiResponse({ status: 201, description: 'Vai trò đã được tạo thành công' })
   @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
@@ -19,6 +25,7 @@ export class RoleController {
   }
 
   @Post('seed')
+  @Permissions(Permission.PERMISSION_MANAGE)
   @ApiOperation({ summary: 'Seed dữ liệu vai trò mặc định' })
   @ApiResponse({ status: 201, description: 'Đã seed dữ liệu vai trò thành công' })
   seedRoles() {
@@ -26,6 +33,7 @@ export class RoleController {
   }
 
   @Get()
+  @Permissions(Permission.ROLE_VIEW)
   @ApiOperation({ summary: 'Lấy danh sách tất cả vai trò' })
   @ApiResponse({ status: 200, description: 'Danh sách vai trò' })
   findAll() {
@@ -33,6 +41,7 @@ export class RoleController {
   }
 
   @Get('permissions/list')
+  @Permissions(Permission.PERMISSION_VIEW)
   @ApiOperation({ summary: 'Lấy danh sách tất cả permissions' })
   @ApiResponse({ status: 200, description: 'Danh sách permissions' })
   getAllPermissions() {
@@ -40,6 +49,7 @@ export class RoleController {
   }
 
   @Get(':id')
+  @Permissions(Permission.ROLE_VIEW)
   @ApiOperation({ summary: 'Lấy thông tin vai trò theo ID' })
   @ApiParam({ name: 'id', description: 'ID vai trò' })
   @ApiResponse({ status: 200, description: 'Thông tin vai trò' })
@@ -49,6 +59,7 @@ export class RoleController {
   }
 
   @Put(':id')
+  @Permissions(Permission.ROLE_UPDATE)
   @ApiOperation({ summary: 'Cập nhật thông tin vai trò' })
   @ApiParam({ name: 'id', description: 'ID vai trò' })
   @ApiResponse({ status: 200, description: 'Vai trò đã được cập nhật' })
@@ -58,6 +69,7 @@ export class RoleController {
   }
 
   @Delete(':id')
+  @Permissions(Permission.ROLE_DELETE)
   @ApiOperation({ summary: 'Xóa vai trò' })
   @ApiParam({ name: 'id', description: 'ID vai trò' })
   @ApiResponse({ status: 200, description: 'Vai trò đã được xóa' })

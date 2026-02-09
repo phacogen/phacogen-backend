@@ -1,15 +1,22 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { ClinicService } from './clinic.service';
 import { CreateClinicDto } from './dto/create-clinic.dto';
 import { UpdateClinicDto } from './dto/update-clinic.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Permissions } from '../auth/decorators/permissions.decorator';
+import { Permission } from '../role/schemas/role.schema';
 
 @ApiTags('clinics')
+@ApiBearerAuth()
 @Controller('clinics')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class ClinicController {
   constructor(private readonly clinicService: ClinicService) {}
 
   @Post()
+  @Permissions(Permission.CLINIC_CREATE)
   @ApiOperation({ summary: 'Tạo phòng khám mới' })
   @ApiResponse({ status: 201, description: 'Phòng khám đã được tạo thành công' })
   @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
@@ -18,6 +25,7 @@ export class ClinicController {
   }
 
   @Get()
+  @Permissions(Permission.CLINIC_VIEW)
   @ApiOperation({ summary: 'Lấy danh sách tất cả phòng khám' })
   @ApiResponse({ status: 200, description: 'Danh sách phòng khám' })
   findAll() {
@@ -25,6 +33,7 @@ export class ClinicController {
   }
 
   @Get('nearby')
+  @Permissions(Permission.CLINIC_VIEW)
   @ApiOperation({ summary: 'Tìm phòng khám gần vị trí hiện tại' })
   @ApiQuery({ name: 'lat', description: 'Latitude', example: '10.762622' })
   @ApiQuery({ name: 'lng', description: 'Longitude', example: '106.660172' })
@@ -42,6 +51,7 @@ export class ClinicController {
   }
 
   @Get('code/:maPhongKham')
+  @Permissions(Permission.CLINIC_VIEW)
   @ApiOperation({ summary: 'Tìm phòng khám theo mã' })
   @ApiParam({ name: 'maPhongKham', description: 'Mã phòng khám', example: 'PK001' })
   @ApiResponse({ status: 200, description: 'Thông tin phòng khám' })
@@ -51,6 +61,7 @@ export class ClinicController {
   }
 
   @Get(':id')
+  @Permissions(Permission.CLINIC_DETAIL_VIEW)
   @ApiOperation({ summary: 'Lấy thông tin phòng khám theo ID' })
   @ApiParam({ name: 'id', description: 'ID phòng khám' })
   @ApiResponse({ status: 200, description: 'Thông tin phòng khám' })
@@ -60,6 +71,7 @@ export class ClinicController {
   }
 
   @Put(':id')
+  @Permissions(Permission.CLINIC_UPDATE)
   @ApiOperation({ summary: 'Cập nhật thông tin phòng khám' })
   @ApiParam({ name: 'id', description: 'ID phòng khám' })
   @ApiResponse({ status: 200, description: 'Phòng khám đã được cập nhật' })
@@ -69,6 +81,7 @@ export class ClinicController {
   }
 
   @Delete(':id')
+  @Permissions(Permission.CLINIC_DELETE)
   @ApiOperation({ summary: 'Xóa phòng khám' })
   @ApiParam({ name: 'id', description: 'ID phòng khám' })
   @ApiResponse({ status: 200, description: 'Phòng khám đã được xóa' })

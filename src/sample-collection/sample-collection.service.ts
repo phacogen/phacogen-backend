@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { Model } from 'mongoose';
 import { EmailService } from '../email/email.service';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType } from '../notification/schemas/notification.schema';
@@ -52,12 +52,6 @@ export class SampleCollectionService {
     // Ensure uuTien is boolean
     const uuTien = data.uuTien === true || data.uuTien === 'true';
 
-    console.log('Creating sample collection with data:', {
-      ...data,
-      maLenh,
-      uuTien,
-    });
-
     const sampleCollection = new this.sampleCollectionModel({
       ...data,
       maLenh,
@@ -65,7 +59,6 @@ export class SampleCollectionService {
     });
 
     const saved = await sampleCollection.save();
-    console.log('Saved sample collection:', saved);
 
     // Lưu lịch sử: Tạo lệnh (không có trạng thái trước đó)
     await this.saveHistory(
@@ -126,41 +119,41 @@ export class SampleCollectionService {
     totalPages: number;
   }> {
     const { status, search, page = 1, limit = 10 } = params;
-    
+
     // Build query filter
     const filter: any = {};
-    
+
     // Filter by status
     if (status) {
       filter.trangThai = status;
     }
-    
+
     // Search by maLenh or noiDungCongViec
     if (search) {
       filter.$or = [
         { maLenh: { $regex: search, $options: 'i' } }, // Case-insensitive search
       ];
-      
+
       // Nếu search có thể là ObjectId, tìm theo noiDungCongViec
       // Nhưng vì noiDungCongViec là reference, ta cần populate trước
       // Để đơn giản, ta sẽ tìm work content trước
       const workContents = await this.sampleCollectionModel.db.collection('workcontents').find({
         tenCongViec: { $regex: search, $options: 'i' }
       }).toArray();
-      
+
       if (workContents.length > 0) {
         filter.$or.push({
           noiDungCongViec: { $in: workContents.map(wc => wc._id) }
         });
       }
     }
-    
+
     // Calculate skip
     const skip = (page - 1) * limit;
-    
+
     // Get total count
     const total = await this.sampleCollectionModel.countDocuments(filter).exec();
-    
+
     // Get paginated data
     const data = await this.sampleCollectionModel
       .find(filter)
@@ -173,7 +166,7 @@ export class SampleCollectionService {
       .skip(skip)
       .limit(limit)
       .exec();
-    
+
     return {
       data,
       total,
@@ -260,18 +253,18 @@ export class SampleCollectionService {
     if (result && data.nhanVienThucHien && oldData.nhanVienThucHien?.toString() !== data.nhanVienThucHien) {
       // Gửi thông báo cho: người được giao, người tạo lệnh, và Admin
       const recipientIds = new Set<string>();
-      
+
       // 1. Người được giao
       recipientIds.add(data.nhanVienThucHien);
-      
+
       // 2. Người tạo lệnh
       if (result.nguoiGiaoLenh) {
-        const nguoiGiaoLenhId = typeof result.nguoiGiaoLenh === 'object' 
+        const nguoiGiaoLenhId = typeof result.nguoiGiaoLenh === 'object'
           ? (result.nguoiGiaoLenh as any)._id.toString()
           : (result.nguoiGiaoLenh as any).toString();
         recipientIds.add(nguoiGiaoLenhId);
       }
-      
+
       // 3. Tất cả Admin
       const admins = await this.getAdminUsers();
       admins.forEach(admin => recipientIds.add(admin._id.toString()));
@@ -298,7 +291,7 @@ export class SampleCollectionService {
 
     // 1. Người tạo lệnh
     if (order.nguoiGiaoLenh) {
-      const nguoiGiaoLenhId = typeof order.nguoiGiaoLenh === 'object' 
+      const nguoiGiaoLenhId = typeof order.nguoiGiaoLenh === 'object'
         ? (order.nguoiGiaoLenh as any)._id.toString()
         : (order.nguoiGiaoLenh as any).toString();
       recipientIds.add(nguoiGiaoLenhId);
@@ -686,18 +679,18 @@ export class SampleCollectionService {
   // Tìm các lệnh quá hạn
   async findOverdueOrders(): Promise<SampleCollection[]> {
     const now = new Date();
-    
+
     // Tìm các lệnh có:
     // - Hạn hoàn thành < hiện tại
     // - Trạng thái khác HOAN_THANH_KIEM_TRA và DA_HUY
     return this.sampleCollectionModel
       .find({
         thoiGianHenHoanThanh: { $lt: now },
-        trangThai: { 
+        trangThai: {
           $nin: [
             SampleCollectionStatus.HOAN_THANH_KIEM_TRA,
             SampleCollectionStatus.DA_HUY
-          ] 
+          ]
         },
       })
       .populate('nguoiGiaoLenh')
@@ -708,13 +701,10 @@ export class SampleCollectionService {
   // Gửi thông báo cho các lệnh quá hạn
   async sendOverdueNotifications() {
     const overdueOrders = await this.findOverdueOrders();
-    
+
     if (overdueOrders.length === 0) {
-      console.log('No overdue orders found');
       return;
     }
-
-    console.log(`Found ${overdueOrders.length} overdue orders`);
 
     for (const order of overdueOrders) {
       // Kiểm tra xem đã gửi thông báo quá hạn chưa
@@ -754,15 +744,12 @@ export class SampleCollectionService {
           relatedOrderId: order._id.toString(),
         });
       }
-
-      console.log(`Sent overdue notifications for order ${order.maLenh} to ${recipientIds.size} users`);
     }
   }
 
   // Cron job chạy mỗi giờ để kiểm tra lệnh quá hạn
   @Cron(CronExpression.EVERY_HOUR)
   async handleOverdueCheck() {
-    console.log('Running overdue check...');
     await this.sendOverdueNotifications();
   }
 
@@ -771,8 +758,6 @@ export class SampleCollectionService {
     const today = new Date();
     const dayOfWeek = today.getDay(); // 0=CN, 1=T2, ..., 6=T7
     const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
-
-    // Lấy tất cả phòng khám có bật tự động tạo lệnh
     const clinics = await this.sampleCollectionModel.db.collection('clinics').find({
       tuDongTaoLenh: true,
       dangHoatDong: true,
@@ -786,7 +771,7 @@ export class SampleCollectionService {
       try {
         // Kiểm tra xem có cấu hình nào khớp với ngày hôm nay không
         const cauHinhList = clinic.cauHinhTuDongTaoLenh || [];
-        
+
         for (const cauHinh of cauHinhList) {
           // Kiểm tra ngày trong tuần có khớp không
           if (!cauHinh.ngayTaoLenhTrongTuan || !cauHinh.ngayTaoLenhTrongTuan.includes(dayOfWeek)) {
@@ -807,8 +792,6 @@ export class SampleCollectionService {
             skipped++;
             continue;
           }
-
-          // Tạo lệnh mới
           const orderData = {
             phongKham: clinic._id.toString(),
             noiDungCongViec: cauHinh.noiDungCongViecMacDinh,
@@ -816,6 +799,10 @@ export class SampleCollectionService {
             ghiChu: cauHinh.ghiChuLenh || '',
             uuTien: cauHinh.lenhUuTien || false,
             nhanVienThucHien: clinic.nhanVienPhuTrach || undefined,
+            trangthai: SampleCollectionStatus.DANG_THUC_HIEN,
+            thoiGianHenHoanThanh: cauHinh.thoiGianHenHoanThanh
+              ? new Date(Date.now() + cauHinh.thoiGianHenHoanThanh * 60 * 60 * 1000)
+              : undefined,
           };
 
           await this.create(orderData);
