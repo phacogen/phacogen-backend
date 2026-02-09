@@ -1,10 +1,11 @@
 import { Controller, Get, Post, Put, Delete, Body, Param } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
 import { RoleService } from './role.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 
 @ApiTags('roles')
+@ApiBearerAuth('JWT-auth')
 @Controller('roles')
 export class RoleController {
   constructor(private readonly roleService: RoleService) {}
@@ -17,11 +18,25 @@ export class RoleController {
     return this.roleService.create(data);
   }
 
+  @Post('seed')
+  @ApiOperation({ summary: 'Seed dữ liệu vai trò mặc định' })
+  @ApiResponse({ status: 201, description: 'Đã seed dữ liệu vai trò thành công' })
+  seedRoles() {
+    return this.roleService.seedDefaultRoles();
+  }
+
   @Get()
   @ApiOperation({ summary: 'Lấy danh sách tất cả vai trò' })
   @ApiResponse({ status: 200, description: 'Danh sách vai trò' })
   findAll() {
     return this.roleService.findAll();
+  }
+
+  @Get('permissions/list')
+  @ApiOperation({ summary: 'Lấy danh sách tất cả permissions' })
+  @ApiResponse({ status: 200, description: 'Danh sách permissions' })
+  getAllPermissions() {
+    return this.roleService.getAllPermissions();
   }
 
   @Get(':id')

@@ -28,6 +28,18 @@ async function bootstrap() {
     .setTitle('Phacogen Medical Supply API')
     .setDescription('API documentation for Phacogen Medical Supply Management System')
     .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Enter JWT token',
+        in: 'header',
+      },
+      'JWT-auth', // This name here is important for matching up with @ApiBearerAuth() in your controllers
+    )
+    .addTag('auth', 'Authentication endpoints')
     .addTag('clinics', 'Clinic management endpoints')
     .addTag('orders', 'Order management endpoints')
     .addTag('users', 'User management endpoints')
@@ -36,10 +48,15 @@ async function bootstrap() {
     .addTag('work-schedules', 'Work schedule management endpoints')
     .addTag('work-contents', 'Work content management endpoints')
     .addTag('supply', 'Supply and allocation management endpoints')
+    .addTag('notifications', 'Notification management endpoints')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api-docs', app, document);
+  SwaggerModule.setup('api-docs', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true, // Giữ token khi refresh trang
+    },
+  });
 
   await app.listen(5001);
   console.log('🚀 Backend is running on http://localhost:5001');

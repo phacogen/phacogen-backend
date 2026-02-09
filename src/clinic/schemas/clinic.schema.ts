@@ -35,6 +35,34 @@ export class Clinic extends Document {
 
   @Prop()
   ghiChu?: string;
+
+  @Prop({ default: false })
+  tuDongTaoLenh?: boolean;
+
+  @Prop({
+    type: [{
+      ngayTaoLenhTrongTuan: [Number],
+      noiDungCongViecMacDinh: String,
+      ghiChuLenh: String,
+      lenhUuTien: Boolean,
+    }],
+    default: []
+  })
+  cauHinhTuDongTaoLenh?: Array<{
+    ngayTaoLenhTrongTuan: number[];
+    noiDungCongViecMacDinh?: string;
+    ghiChuLenh?: string;
+    lenhUuTien?: boolean;
+  }>;
+
+  @Prop()
+  nhanVienPhuTrach?: string;
+
+  @Prop()
+  sdtLienHe?: string;
+
+  @Prop()
+  linkZalo?: string;
 }
 
 export const ClinicSchema = SchemaFactory.createForClass(Clinic);

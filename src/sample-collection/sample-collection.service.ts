@@ -765,4 +765,67 @@ export class SampleCollectionService {
     console.log('Running overdue check...');
     await this.sendOverdueNotifications();
   }
+
+  // Tự động tạo lệnh thu mẫu dựa trên cấu hình phòng khám
+  async autoCreateOrders(nguoiGiaoLenh: string): Promise<{ created: number; skipped: number; errors: string[] }> {
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0=CN, 1=T2, ..., 6=T7
+    const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+
+    // Lấy tất cả phòng khám có bật tự động tạo lệnh
+    const clinics = await this.sampleCollectionModel.db.collection('clinics').find({
+      tuDongTaoLenh: true,
+      dangHoatDong: true,
+    }).toArray();
+
+    let created = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (const clinic of clinics) {
+      try {
+        // Kiểm tra xem có cấu hình nào khớp với ngày hôm nay không
+        const cauHinhList = clinic.cauHinhTuDongTaoLenh || [];
+        
+        for (const cauHinh of cauHinhList) {
+          // Kiểm tra ngày trong tuần có khớp không
+          if (!cauHinh.ngayTaoLenhTrongTuan || !cauHinh.ngayTaoLenhTrongTuan.includes(dayOfWeek)) {
+            continue;
+          }
+
+          // Kiểm tra xem hôm nay đã tạo lệnh cho cấu hình này chưa
+          const existingOrder = await this.sampleCollectionModel.findOne({
+            phongKham: clinic._id,
+            noiDungCongViec: cauHinh.noiDungCongViecMacDinh,
+            createdAt: {
+              $gte: new Date(dateStr + 'T00:00:00.000Z'),
+              $lt: new Date(dateStr + 'T23:59:59.999Z'),
+            },
+          }).exec();
+
+          if (existingOrder) {
+            skipped++;
+            continue;
+          }
+
+          // Tạo lệnh mới
+          const orderData = {
+            phongKham: clinic._id.toString(),
+            noiDungCongViec: cauHinh.noiDungCongViecMacDinh,
+            nguoiGiaoLenh,
+            ghiChu: cauHinh.ghiChuLenh || '',
+            uuTien: cauHinh.lenhUuTien || false,
+            nhanVienThucHien: clinic.nhanVienPhuTrach || undefined,
+          };
+
+          await this.create(orderData);
+          created++;
+        }
+      } catch (error) {
+        errors.push(`${clinic.tenPhongKham}: ${error.message}`);
+      }
+    }
+
+    return { created, skipped, errors };
+  }
 }

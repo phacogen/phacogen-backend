@@ -222,4 +222,11 @@ export class SampleCollectionController {
       anhHoanThanh: imagePaths,
     });
   }
+
+  @Post('auto-create')
+  @ApiOperation({ summary: 'Kiểm tra và tự động tạo lệnh thu mẫu theo cấu hình phòng khám' })
+  @ApiResponse({ status: 200, description: 'Kết quả tạo lệnh tự động' })
+  async autoCreateOrders(@Body() body: { nguoiGiaoLenh: string }) {
+    return this.sampleCollectionService.autoCreateOrders(body.nguoiGiaoLenh);
+  }
 }

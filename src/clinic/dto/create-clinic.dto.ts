@@ -38,4 +38,35 @@ export class CreateClinicDto {
 
   @ApiPropertyOptional({ example: 'Ghi chú thêm', description: 'Ghi chú' })
   ghiChu?: string;
+
+  @ApiPropertyOptional({ example: false, description: 'Tự động tạo lệnh thu mẫu có định', default: false })
+  tuDongTaoLenh?: boolean;
+
+  @ApiPropertyOptional({
+    example: [
+      {
+        ngayTaoLenhTrongTuan: [1, 2, 3, 4, 5],
+        noiDungCongViecMacDinh: '507f1f77bcf86cd799439011',
+        ghiChuLenh: 'Ghi chú cho lệnh',
+        lenhUuTien: false
+      }
+    ],
+    description: 'Danh sách cấu hình tự động tạo lệnh',
+    type: 'array'
+  })
+  cauHinhTuDongTaoLenh?: Array<{
+    ngayTaoLenhTrongTuan: number[];
+    noiDungCongViecMacDinh?: string;
+    ghiChuLenh?: string;
+    lenhUuTien?: boolean;
+  }>;
+
+  @ApiPropertyOptional({ example: '507f1f77bcf86cd799439011', description: 'ID nhân viên phụ trách' })
+  nhanVienPhuTrach?: string;
+
+  @ApiPropertyOptional({ example: '0901234567', description: 'Số điện thoại liên hệ' })
+  sdtLienHe?: string;
+
+  @ApiPropertyOptional({ example: 'https://zalo.me/0901234567', description: 'Link Zalo' })
+  linkZalo?: string;
 }

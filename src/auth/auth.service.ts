@@ -70,10 +70,16 @@ export class AuthService {
     const userObject = user.toObject();
     delete userObject.password;
 
+    // Lấy danh sách permissions từ role
+    const permissions = (user.vaiTro as any)?.permissions || [];
+
     return {
       success: true,
       message: 'Đăng nhập thành công',
-      user: userObject,
+      user: {
+        ...userObject,
+        permissions, // Thêm permissions vào user object
+      },
       accessToken,
       sessionId: loginHistory._id,
     };
@@ -91,7 +97,14 @@ export class AuthService {
 
     const userObject = user.toObject();
     delete userObject.password;
-    return userObject;
+    
+    // Thêm permissions vào user object
+    const permissions = (user.vaiTro as any)?.permissions || [];
+    
+    return {
+      ...userObject,
+      permissions,
+    };
   }
 
   // Lưu thông tin thiết bị khi đăng nhập
