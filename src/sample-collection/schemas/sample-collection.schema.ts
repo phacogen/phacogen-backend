@@ -14,9 +14,6 @@ export class SampleCollection extends Document {
   @Prop({ required: true, unique: true })
   maLenh: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Clinic', required: true })
-  phongKham: Types.ObjectId;
-
   @Prop({ type: Types.ObjectId, ref: 'WorkContent', required: true })
   noiDungCongViec: Types.ObjectId;
 
@@ -26,20 +23,8 @@ export class SampleCollection extends Document {
   @Prop({ type: Types.ObjectId, ref: 'User' })
   nhanVienThucHien?: Types.ObjectId;
 
-  @Prop({ default: 0 })
-  soTienCuocNhanMau: number;
-
-  @Prop({ default: 0 })
-  soTienShip: number;
-
-  @Prop({ default: 0 })
-  soTienGuiXe: number;
-
   @Prop({ type: [String], default: [] })
-  anhHoanThanh?: string[];
-
-  @Prop({ type: [String], default: [] })
-  anhHoanThanhKiemTra?: string[];
+  anhHoanThanh?: string[]; // Ảnh hoàn thành (bước HOAN_THANH)
 
   @Prop({ required: true, enum: SampleCollectionStatus, default: SampleCollectionStatus.CHO_DIEU_PHOI })
   trangThai: SampleCollectionStatus;
@@ -67,6 +52,34 @@ export class SampleCollection extends Document {
 
   @Prop()
   thoiGianHenHoanThanh?: Date;
+
+  // Bus station order fields (optional - chỉ dùng cho lệnh nhà xe)
+  @Prop()
+  tenNhaXe?: string;
+
+  @Prop()
+  diaChiNhaXe?: string;
+
+  // Danh sách phòng khám và chi phí
+  // - Lệnh standard: 1 item duy nhất
+  // - Lệnh bus station: nhiều items
+  @Prop({
+    type: [{
+      phongKham: { type: Types.ObjectId, ref: 'Clinic', required: true },
+      soTienCuocNhanMau: { type: Number, default: 0 },
+      soTienShip: { type: Number, default: 0 },
+      soTienGuiXe: { type: Number, default: 0 },
+      anhHoanThanhKiemTra: { type: [String], default: [] } // Ảnh hoàn thành kiểm tra (bước HOAN_THANH_KIEM_TRA)
+    }],
+    default: []
+  })
+  phongKhamItems: Array<{
+    phongKham: Types.ObjectId;
+    soTienCuocNhanMau: number;
+    soTienShip: number;
+    soTienGuiXe: number;
+    anhHoanThanhKiemTra: string[];
+  }>;
 }
 
 export const SampleCollectionSchema = SchemaFactory.createForClass(SampleCollection);

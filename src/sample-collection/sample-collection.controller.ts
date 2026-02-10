@@ -205,6 +205,7 @@ export class SampleCollectionController {
   @ApiOperation({ summary: 'Upload hình ảnh hoàn thành' })
   @ApiConsumes('multipart/form-data')
   @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
+  @ApiQuery({ name: 'saveToDb', description: 'Có lưu vào database không (true/false)', required: false })
   @ApiResponse({ status: 200, description: 'Upload thành công' })
   @UseInterceptors(
     FilesInterceptor('images', 10, {
@@ -230,11 +231,23 @@ export class SampleCollectionController {
   async uploadImages(
     @Param('id') id: string,
     @UploadedFiles() files: Array<any>,
+    @Query('saveToDb') saveToDb?: string,
   ) {
     const imagePaths = files.map(file => `/uploads/sample-collections/${file.filename}`);
-    return this.sampleCollectionService.update(id, {
+    
+    // Nếu saveToDb = 'true', lưu vào database (cho bước hoàn thành standard)
+    // Nếu không, chỉ trả về đường dẫn (cho bước verification bus station)
+    if (saveToDb === 'true') {
+      return this.sampleCollectionService.update(id, {
+        anhHoanThanh: imagePaths,
+      });
+    }
+    
+    // Mặc định: chỉ trả về đường dẫn
+    return {
       anhHoanThanh: imagePaths,
-    });
+      message: 'Upload thành công',
+    };
   }
 
   @Post('auto-create')
@@ -242,5 +255,48 @@ export class SampleCollectionController {
   @ApiResponse({ status: 200, description: 'Kết quả tạo lệnh tự động' })
   async autoCreateOrders(@Body() body: { nguoiGiaoLenh: string }) {
     return this.sampleCollectionService.autoCreateOrders(body.nguoiGiaoLenh);
+  }
+
+  @Post(':id/complete-bus-station')
+  @Permissions(Permission.ORDER_UPDATE)
+  @ApiOperation({ summary: 'Hoàn thành lệnh nhận mẫu từ nhà xe (chỉ upload ảnh)' })
+  @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
+  @ApiResponse({ status: 200, description: 'Đã hoàn thành lệnh nhà xe' })
+  @ApiResponse({ status: 400, description: 'Lệnh không phải là lệnh nhà xe' })
+  async completeBusStationOrder(
+    @Param('id') id: string,
+    @Body() body: { anhHoanThanh: string[]; nguoiThucHien: string }
+  ) {
+    return this.sampleCollectionService.completeBusStationOrder(
+      id,
+      body.anhHoanThanh,
+      body.nguoiThucHien
+    );
+  }
+
+  @Post(':id/complete-verification-clinic-items')
+  @Permissions(Permission.ORDER_UPDATE)
+  @ApiOperation({ summary: 'Hoàn thành kiểm tra với nhiều phòng khám (cho lệnh nhà xe)' })
+  @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
+  @ApiResponse({ status: 200, description: 'Đã hoàn thành kiểm tra' })
+  @ApiResponse({ status: 400, description: 'Lệnh không phải là lệnh nhà xe hoặc chưa hoàn thành' })
+  async completeVerificationWithClinicItems(
+    @Param('id') id: string,
+    @Body() body: {
+      phongKhamItems: Array<{
+        phongKham: string;
+        soTienCuocNhanMau: number;
+        soTienShip: number;
+        soTienGuiXe: number;
+        anhHoanThanhKiemTra: string[];
+      }>;
+      nguoiThucHien: string;
+    }
+  ) {
+    return this.sampleCollectionService.completeVerificationWithClinicItems(
+      id,
+      body.phongKhamItems,
+      body.nguoiThucHien
+    );
   }
 }

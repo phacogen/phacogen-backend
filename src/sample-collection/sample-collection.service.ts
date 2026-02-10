@@ -52,10 +52,24 @@ export class SampleCollectionService {
     // Ensure uuTien is boolean
     const uuTien = data.uuTien === true || data.uuTien === 'true';
 
+    // Xử lý phongKhamItems
+    // Nếu có phongKham (lệnh standard), tạo phongKhamItems với 1 item
+    let phongKhamItems = data.phongKhamItems || [];
+    if (data.phongKham && phongKhamItems.length === 0) {
+      phongKhamItems = [{
+        phongKham: data.phongKham,
+        soTienCuocNhanMau: 0,
+        soTienShip: 0,
+        soTienGuiXe: 0,
+        anhHoanThanhKiemTra: []
+      }];
+    }
+
     const sampleCollection = new this.sampleCollectionModel({
       ...data,
       maLenh,
       uuTien,
+      phongKhamItems,
     });
 
     const saved = await sampleCollection.save();
@@ -98,7 +112,7 @@ export class SampleCollectionService {
   async findAll(filter: any = {}): Promise<SampleCollection[]> {
     return this.sampleCollectionModel
       .find(filter)
-      .populate('phongKham')
+      .populate('phongKhamItems.phongKham')
       .populate('noiDungCongViec')
       .populate('nguoiGiaoLenh')
       .populate('nhanVienThucHien')
@@ -157,7 +171,7 @@ export class SampleCollectionService {
     // Get paginated data
     const data = await this.sampleCollectionModel
       .find(filter)
-      .populate('phongKham')
+      .populate('phongKhamItems.phongKham')
       .populate('noiDungCongViec')
       .populate('nguoiGiaoLenh')
       .populate('nhanVienThucHien')
@@ -179,7 +193,7 @@ export class SampleCollectionService {
   async findOne(id: string): Promise<SampleCollection> {
     return this.sampleCollectionModel
       .findById(id)
-      .populate('phongKham')
+      .populate('phongKhamItems.phongKham')
       .populate('noiDungCongViec')
       .populate('nguoiGiaoLenh')
       .populate('nhanVienThucHien')
@@ -190,7 +204,7 @@ export class SampleCollectionService {
   async findByCode(maLenh: string): Promise<SampleCollection> {
     return this.sampleCollectionModel
       .findOne({ maLenh })
-      .populate('phongKham')
+      .populate('phongKhamItems.phongKham')
       .populate('noiDungCongViec')
       .populate('nguoiGiaoLenh')
       .populate('nhanVienThucHien')
@@ -201,9 +215,14 @@ export class SampleCollectionService {
   async update(id: string, data: any): Promise<SampleCollection> {
     const oldData = await this.sampleCollectionModel.findById(id).exec();
 
+    // Ensure uuTien is boolean if provided
+    if (data.uuTien !== undefined) {
+      data.uuTien = data.uuTien === true || data.uuTien === 'true';
+    }
+
     const result = await this.sampleCollectionModel
       .findByIdAndUpdate(id, data, { new: true })
-      .populate('phongKham')
+      .populate('phongKhamItems.phongKham')
       .populate('noiDungCongViec')
       .populate('nguoiGiaoLenh')
       .populate('nhanVienThucHien')
@@ -333,7 +352,7 @@ export class SampleCollectionService {
         },
         { new: true }
       )
-      .populate('phongKham')
+      .populate('phongKhamItems.phongKham')
       .populate('noiDungCongViec')
       .populate('nguoiGiaoLenh')
       .populate('nhanVienThucHien')
@@ -369,7 +388,7 @@ export class SampleCollectionService {
 
     const result = await this.sampleCollectionModel
       .findByIdAndUpdate(id, updateData, { new: true })
-      .populate('phongKham')
+      .populate('phongKhamItems.phongKham')
       .populate('noiDungCongViec')
       .populate('nguoiGiaoLenh')
       .populate('nhanVienThucHien')
@@ -392,31 +411,35 @@ export class SampleCollectionService {
         case SampleCollectionStatus.HOAN_THANH_KIEM_TRA:
           ghiChu = 'Hoàn thành kiểm tra';
 
-          // Gửi email cho phòng khám nếu có email
-          if (result.phongKham && (result.phongKham as any).email) {
-            const clinic = result.phongKham as any;
+          // Gửi email cho từng phòng khám trong phongKhamItems
+          if (result.phongKhamItems && result.phongKhamItems.length > 0) {
             const employee = result.nhanVienThucHien as any;
             const employeeName = employee?.hoTen || 'Nhân viên';
 
-            const emailResult = await this.emailService.sendCompletionEmail(
-              clinic.email,
-              clinic.tenPhongKham,
-              result.maLenh,
-              new Date(),
-              employeeName,
-            );
+            for (const item of result.phongKhamItems) {
+              const clinic = item.phongKham as any;
+              if (clinic && clinic.email) {
+                const emailResult = await this.emailService.sendCompletionEmail(
+                  clinic.email,
+                  clinic.tenPhongKham,
+                  result.maLenh,
+                  new Date(),
+                  employeeName,
+                );
+                console.log(`Email ${emailResult.success ? 'sent successfully' : 'failed'} to ${clinic.email} for order ${result.maLenh}`);
+              }
+            }
 
-            // Lưu kết quả gửi email vào additionalData để trả về cho frontend
             if (!additionalData) additionalData = {};
-            additionalData.emailStatus = emailResult;
-
-            console.log(`Email ${emailResult.success ? 'sent successfully' : 'failed'} to ${clinic.email} for order ${result.maLenh}`);
+            additionalData.emailStatus = {
+              success: true,
+              message: `Đã gửi email đến ${result.phongKhamItems.length} phòng khám`,
+            };
           } else {
-            // Không có email phòng khám
             if (!additionalData) additionalData = {};
             additionalData.emailStatus = {
               success: false,
-              message: 'Phòng khám chưa cấu hình địa chỉ email',
+              message: 'Không có phòng khám nào để gửi email',
             };
           }
           break;
@@ -450,6 +473,21 @@ export class SampleCollectionService {
   async getStatsSummary(): Promise<any> {
     const collections = await this.sampleCollectionModel.find().exec();
 
+    // Tính tổng tiền từ phongKhamItems
+    let tongSoTienCuocNhanMau = 0;
+    let tongSoTienShip = 0;
+    let tongSoTienGuiXe = 0;
+
+    collections.forEach(c => {
+      if (c.phongKhamItems && c.phongKhamItems.length > 0) {
+        c.phongKhamItems.forEach(item => {
+          tongSoTienCuocNhanMau += item.soTienCuocNhanMau || 0;
+          tongSoTienShip += item.soTienShip || 0;
+          tongSoTienGuiXe += item.soTienGuiXe || 0;
+        });
+      }
+    });
+
     const stats = {
       total: collections.length,
       choDieuPhoi: collections.filter(c => c.trangThai === SampleCollectionStatus.CHO_DIEU_PHOI).length,
@@ -457,9 +495,9 @@ export class SampleCollectionService {
       hoanThanh: collections.filter(c => c.trangThai === SampleCollectionStatus.HOAN_THANH).length,
       hoanThanhKiemTra: collections.filter(c => c.trangThai === SampleCollectionStatus.HOAN_THANH_KIEM_TRA).length,
       daHuy: collections.filter(c => c.trangThai === SampleCollectionStatus.DA_HUY).length,
-      tongSoTienCuocNhanMau: collections.reduce((sum, c) => sum + (c.soTienCuocNhanMau || 0), 0),
-      tongSoTienShip: collections.reduce((sum, c) => sum + (c.soTienShip || 0), 0),
-      tongSoTienGuiXe: collections.reduce((sum, c) => sum + (c.soTienGuiXe || 0), 0),
+      tongSoTienCuocNhanMau,
+      tongSoTienShip,
+      tongSoTienGuiXe,
     };
 
     return stats;
@@ -468,7 +506,7 @@ export class SampleCollectionService {
   async findByStaff(staffId: string): Promise<SampleCollection[]> {
     return this.sampleCollectionModel
       .find({ nhanVienThucHien: staffId })
-      .populate('phongKham')
+      .populate('phongKhamItems.phongKham')
       .populate('noiDungCongViec')
       .populate('nguoiGiaoLenh')
       .populate('nhanVienThucHien')
@@ -478,8 +516,8 @@ export class SampleCollectionService {
 
   async findByClinic(clinicId: string): Promise<SampleCollection[]> {
     return this.sampleCollectionModel
-      .find({ phongKham: clinicId })
-      .populate('phongKham')
+      .find({ 'phongKhamItems.phongKham': clinicId })
+      .populate('phongKhamItems.phongKham')
       .populate('noiDungCongViec')
       .populate('nguoiGiaoLenh')
       .populate('nhanVienThucHien')
@@ -490,7 +528,7 @@ export class SampleCollectionService {
   async exportToExcel(): Promise<any> {
     const collections = await this.sampleCollectionModel
       .find()
-      .populate('phongKham')
+      .populate('phongKhamItems.phongKham')
       .populate('noiDungCongViec')
       .populate('nguoiGiaoLenh')
       .populate('nhanVienThucHien')
@@ -550,7 +588,7 @@ export class SampleCollectionService {
   async resendCompletionEmail(id: string) {
     const collection = await this.sampleCollectionModel
       .findById(id)
-      .populate('phongKham')
+      .populate('phongKhamItems.phongKham')
       .populate('nhanVienThucHien')
       .exec();
 
@@ -562,24 +600,45 @@ export class SampleCollectionService {
       throw new Error('Lệnh chưa hoàn thành kiểm tra');
     }
 
-    const clinic = collection.phongKham as any;
-    if (!clinic || !clinic.email) {
+    if (!collection.phongKhamItems || collection.phongKhamItems.length === 0) {
       return {
         success: false,
-        message: 'Phòng khám chưa cấu hình địa chỉ email',
+        message: 'Không có phòng khám nào trong lệnh này',
       };
     }
 
     const employee = collection.nhanVienThucHien as any;
     const employeeName = employee?.hoTen || 'Nhân viên';
 
-    return await this.emailService.sendCompletionEmail(
-      clinic.email,
-      clinic.tenPhongKham,
-      collection.maLenh,
-      new Date(),
-      employeeName,
-    );
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const item of collection.phongKhamItems) {
+      const clinic = item.phongKham as any;
+      if (!clinic || !clinic.email) {
+        failCount++;
+        continue;
+      }
+
+      const result = await this.emailService.sendCompletionEmail(
+        clinic.email,
+        clinic.tenPhongKham,
+        collection.maLenh,
+        new Date(),
+        employeeName,
+      );
+
+      if (result.success) {
+        successCount++;
+      } else {
+        failCount++;
+      }
+    }
+
+    return {
+      success: successCount > 0,
+      message: `Đã gửi email đến ${successCount}/${collection.phongKhamItems.length} phòng khám`,
+    };
   }
   async getDashboardStats(filters: {
     status?: string;
@@ -616,11 +675,21 @@ export class SampleCollectionService {
       .populate('nhanVienThucHien', 'hoTen _id')
       .exec();
 
-    // Calculate summary stats
+    // Calculate summary stats từ phongKhamItems
     const tongSoLenh = collections.length;
-    const tongTienCuocNhanMau = collections.reduce((sum, c) => sum + (c.soTienCuocNhanMau || 0), 0);
-    const tongTienShip = collections.reduce((sum, c) => sum + (c.soTienShip || 0), 0);
-    const tongTienGuiXe = collections.reduce((sum, c) => sum + (c.soTienGuiXe || 0), 0);
+    let tongTienCuocNhanMau = 0;
+    let tongTienShip = 0;
+    let tongTienGuiXe = 0;
+
+    collections.forEach(c => {
+      if (c.phongKhamItems && c.phongKhamItems.length > 0) {
+        c.phongKhamItems.forEach(item => {
+          tongTienCuocNhanMau += item.soTienCuocNhanMau || 0;
+          tongTienShip += item.soTienShip || 0;
+          tongTienGuiXe += item.soTienGuiXe || 0;
+        });
+      }
+    });
 
     // Calculate employee stats
     const employeeMap = new Map<string, { name: string; count: number }>();
@@ -753,6 +822,31 @@ export class SampleCollectionService {
     await this.sendOverdueNotifications();
   }
 
+  // Cron job tự động tạo lệnh mỗi ngày lúc 6:00 sáng
+  @Cron('0 6 * * *')
+  async handleAutoCreateOrders() {
+    try {
+      console.log('Running auto-create orders cron job...');
+      
+      // Lấy admin đầu tiên làm người giao lệnh
+      const admins = await this.getAdminUsers();
+      if (admins.length === 0) {
+        console.error('No admin users found for auto-create orders');
+        return;
+      }
+
+      const nguoiGiaoLenh = admins[0]._id.toString();
+      const result = await this.autoCreateOrders(nguoiGiaoLenh);
+      
+      console.log(`Auto-create orders completed: ${result.created} created, ${result.skipped} skipped`);
+      if (result.errors.length > 0) {
+        console.error('Auto-create orders errors:', result.errors);
+      }
+    } catch (error) {
+      console.error('Error in auto-create orders cron job:', error);
+    }
+  }
+
   // Tự động tạo lệnh thu mẫu dựa trên cấu hình phòng khám
   async autoCreateOrders(nguoiGiaoLenh: string): Promise<{ created: number; skipped: number; errors: string[] }> {
     const today = new Date();
@@ -780,7 +874,7 @@ export class SampleCollectionService {
 
           // Kiểm tra xem hôm nay đã tạo lệnh cho cấu hình này chưa
           const existingOrder = await this.sampleCollectionModel.findOne({
-            phongKham: clinic._id,
+            'phongKhamItems.phongKham': clinic._id,
             noiDungCongViec: cauHinh.noiDungCongViecMacDinh,
             createdAt: {
               $gte: new Date(dateStr + 'T00:00:00.000Z'),
@@ -793,16 +887,22 @@ export class SampleCollectionService {
             continue;
           }
           const orderData = {
-            phongKham: clinic._id.toString(),
             noiDungCongViec: cauHinh.noiDungCongViecMacDinh,
             nguoiGiaoLenh,
             ghiChu: cauHinh.ghiChuLenh || '',
             uuTien: cauHinh.lenhUuTien || false,
             nhanVienThucHien: clinic.nhanVienPhuTrach || undefined,
-            trangthai: SampleCollectionStatus.DANG_THUC_HIEN,
+            trangThai: SampleCollectionStatus.DANG_THUC_HIEN,
             thoiGianHenHoanThanh: cauHinh.thoiGianHenHoanThanh
               ? new Date(Date.now() + cauHinh.thoiGianHenHoanThanh * 60 * 60 * 1000)
               : undefined,
+            phongKhamItems: [{
+              phongKham: clinic._id.toString(),
+              soTienCuocNhanMau: 0,
+              soTienShip: 0,
+              soTienGuiXe: 0,
+              anhHoanThanhKiemTra: []
+            }]
           };
 
           await this.create(orderData);
@@ -814,5 +914,140 @@ export class SampleCollectionService {
     }
 
     return { created, skipped, errors };
+  }
+
+  // Helper method để kiểm tra xem lệnh có phải là bus station order không
+  private isBusStationOrder(order: SampleCollection): boolean {
+    const workContentId = typeof order.noiDungCongViec === 'object'
+      ? (order.noiDungCongViec as any)._id.toString()
+      : String(order.noiDungCongViec);
+    return workContentId === '698a9efbbb8b349dfb294dd0';
+  }
+
+  // Hoàn thành lệnh bus station (chỉ upload ảnh, không cần nhập tiền)
+  async completeBusStationOrder(
+    id: string,
+    anhHoanThanh: string[],
+    nguoiThucHien: string
+  ): Promise<SampleCollection> {
+    const order = await this.findOne(id);
+    
+    if (!order) {
+      throw new Error('Không tìm thấy lệnh thu mẫu');
+    }
+
+    if (!this.isBusStationOrder(order)) {
+      throw new Error('Lệnh này không phải là lệnh nhận mẫu từ nhà xe');
+    }
+
+    // Cập nhật trạng thái sang HOAN_THANH với ảnh
+    return this.updateStatus(id, SampleCollectionStatus.HOAN_THANH, {
+      anhHoanThanh,
+      thoiGianHoanThanh: new Date(),
+      nguoiThucHien
+    });
+  }
+
+  // Hoàn thành kiểm tra với nhiều phòng khám (cho bus station order)
+  async completeVerificationWithClinicItems(
+    id: string,
+    phongKhamItems: Array<{
+      phongKham: string;
+      soTienCuocNhanMau: number;
+      soTienShip: number;
+      soTienGuiXe: number;
+      anhHoanThanhKiemTra: string[];
+    }>,
+    nguoiThucHien: string
+  ): Promise<SampleCollection> {
+    const order = await this.findOne(id);
+    
+    if (!order) {
+      throw new Error('Không tìm thấy lệnh thu mẫu');
+    }
+
+    if (!this.isBusStationOrder(order)) {
+      throw new Error('Lệnh này không phải là lệnh nhận mẫu từ nhà xe');
+    }
+
+    if (order.trangThai !== SampleCollectionStatus.HOAN_THANH) {
+      throw new Error('Lệnh phải ở trạng thái HOAN_THANH trước khi hoàn thành kiểm tra');
+    }
+
+    if (!phongKhamItems || phongKhamItems.length === 0) {
+      throw new Error('Phải có ít nhất một phòng khám');
+    }
+
+    // Cập nhật phongKhamItems và chuyển sang HOAN_THANH_KIEM_TRA
+    const updated = await this.sampleCollectionModel
+      .findByIdAndUpdate(
+        id,
+        {
+          phongKhamItems,
+          trangThai: SampleCollectionStatus.HOAN_THANH_KIEM_TRA,
+          thoiGianHoanThanhKiemTra: new Date()
+        },
+        { new: true }
+      )
+      .populate('phongKhamItems.phongKham')
+      .populate('noiDungCongViec')
+      .populate('nguoiGiaoLenh')
+      .populate('nhanVienThucHien')
+      .populate('phongKhamKiemTra')
+      .exec();
+
+    // Gửi email cho từng phòng khám
+    await this.sendBusStationClinicEmails(updated);
+
+    // Lưu lịch sử
+    await this.saveHistory(
+      id,
+      SampleCollectionStatus.HOAN_THANH,
+      SampleCollectionStatus.HOAN_THANH_KIEM_TRA,
+      nguoiThucHien,
+      'Hoàn thành kiểm tra với nhiều phòng khám'
+    );
+
+    // Gửi thông báo
+    await this.sendStatusChangeNotifications(updated, 'Hoàn thành kiểm tra');
+
+    return updated;
+  }
+
+  // Gửi email cho các phòng khám trong bus station order
+  private async sendBusStationClinicEmails(order: SampleCollection): Promise<void> {
+    if (!order.phongKhamItems || order.phongKhamItems.length === 0) {
+      return;
+    }
+
+    const employee = order.nhanVienThucHien as any;
+    const employeeName = employee?.hoTen || 'Nhân viên';
+
+    for (const item of order.phongKhamItems) {
+      try {
+        const clinic = item.phongKham as any;
+        if (!clinic || !clinic.email) {
+          console.warn(`Clinic ${clinic?._id} has no email configured`);
+          continue;
+        }
+
+        await this.emailService.sendBusStationCompletionEmail(
+          clinic.email,
+          clinic.tenPhongKham,
+          order.maLenh,
+          order.tenNhaXe,
+          order.diaChiNhaXe,
+          item.soTienCuocNhanMau,
+          item.soTienShip,
+          item.soTienGuiXe,
+          item.anhHoanThanhKiemTra,
+          new Date(),
+          employeeName
+        );
+      } catch (error) {
+        console.error(`Failed to send email for clinic ${item.phongKham}:`, error);
+        // Continue with other clinics even if one fails
+      }
+    }
   }
 }

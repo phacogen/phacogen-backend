@@ -12,9 +12,6 @@ export class CreateSampleCollectionDto {
   @ApiProperty({ example: 'ML001', description: 'Mã lệnh (unique)' })
   maLenh: string;
 
-  @ApiProperty({ example: '507f1f77bcf86cd799439011', description: 'ID phòng khám' })
-  phongKham: string;
-
   @ApiProperty({ example: '507f1f77bcf86cd799439012', description: 'ID nội dung công việc' })
   noiDungCongViec: string;
 
@@ -23,22 +20,6 @@ export class CreateSampleCollectionDto {
 
   @ApiPropertyOptional({ example: '507f1f77bcf86cd799439014', description: 'ID nhân viên thực hiện' })
   nhanVienThucHien?: string;
-
-  @ApiPropertyOptional({ example: 50010, description: 'Số tiền cước nhận mẫu', default: 0 })
-  soTienCuocNhanMau?: number;
-
-  @ApiPropertyOptional({ example: 30000, description: 'Số tiền ship', default: 0 })
-  soTienShip?: number;
-
-  @ApiPropertyOptional({ example: 10000, description: 'Số tiền gửi xe', default: 0 })
-  soTienGuiXe?: number;
-
-  @ApiPropertyOptional({ 
-    type: [String], 
-    example: ['https://example.com/image1.jpg'], 
-    description: 'Ảnh hoàn thành' 
-  })
-  anhHoanThanh?: string[];
 
   @ApiPropertyOptional({ 
     type: [String], 
@@ -75,4 +56,16 @@ export class CreateSampleCollectionDto {
 
   @ApiPropertyOptional({ example: '2024-01-15T15:00:00Z', description: 'Thời gian hẹn hoàn thành' })
   thoiGianHenHoanThanh?: Date;
+
+  @ApiPropertyOptional({ example: 'Nhà xe Phương Trang', description: 'Tên nhà xe (cho lệnh nhận mẫu từ nhà xe)' })
+  tenNhaXe?: string;
+
+  @ApiPropertyOptional({ example: '123 Đường ABC, Quận 1, TP.HCM', description: 'Địa chỉ nhà xe (cho lệnh nhận mẫu từ nhà xe)' })
+  diaChiNhaXe?: string;
+
+  @ApiPropertyOptional({ 
+    example: '507f1f77bcf86cd799439011', 
+    description: 'ID phòng khám (dùng cho lệnh standard - sẽ tự động tạo phongKhamItems với 1 item)' 
+  })
+  phongKham?: string;
 }
