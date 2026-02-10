@@ -16,6 +16,54 @@ export class ClinicService {
     return this.clinicModel.find().exec();
   }
 
+  async findAllWithPagination(params: {
+    status?: boolean;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    data: Clinic[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const { status, search, page = 1, limit = 10 } = params;
+
+    const filter: any = {};
+
+    if (status !== undefined) {
+      filter.dangHoatDong = status;
+    }
+
+    if (search) {
+      filter.$or = [
+        { tenPhongKham: { $regex: search, $options: 'i' } },
+        { maPhongKham: { $regex: search, $options: 'i' } },
+        { diaChi: { $regex: search, $options: 'i' } },
+        { chuyenKhoa: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+    const total = await this.clinicModel.countDocuments(filter).exec();
+
+    const data = await this.clinicModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .exec();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
   async findOne(id: string): Promise<Clinic> {
     return this.clinicModel.findById(id).exec();
   }

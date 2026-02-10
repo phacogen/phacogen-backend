@@ -33,6 +33,53 @@ export class SupplyService {
     return this.supplyModel.find().sort({ maVatTu: 1 }).exec();
   }
 
+  async findAllSuppliesWithPagination(params?: {
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    data: SupplyDocument[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const { status, search, page = 1, limit = 10 } = params || {};
+
+    const filter: any = {};
+
+    if (status) {
+      filter.trangThai = status;
+    }
+
+    if (search) {
+      filter.$or = [
+        { maVatTu: { $regex: search, $options: 'i' } },
+        { tenVatTu: { $regex: search, $options: 'i' } },
+        { moTa: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+    const total = await this.supplyModel.countDocuments(filter).exec();
+
+    const data = await this.supplyModel
+      .find(filter)
+      .sort({ maVatTu: 1 })
+      .skip(skip)
+      .limit(limit)
+      .exec();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
   async findSupplyById(id: string): Promise<SupplyDocument> {
     const supply = await this.supplyModel.findById(id).exec();
     if (!supply) {
@@ -158,8 +205,20 @@ export class SupplyService {
       filter.trangThai = status;
     }
     
+    // Search by maPhieu or clinic name
     if (search) {
-      filter.maPhieu = { $regex: search, $options: 'i' };
+      // First, find clinics matching the search term
+      const clinics = await this.allocationModel.db.collection('clinics').find({
+        tenPhongKham: { $regex: search, $options: 'i' }
+      }).toArray();
+      
+      const clinicIds = clinics.map(c => c._id);
+      
+      // Search by maPhieu OR clinic name
+      filter.$or = [
+        { maPhieu: { $regex: search, $options: 'i' } },
+        { phongKham: { $in: clinicIds } }
+      ];
     }
     
     const skip = (page - 1) * limit;

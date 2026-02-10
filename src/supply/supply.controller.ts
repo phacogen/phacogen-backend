@@ -124,10 +124,27 @@ export class SupplyController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Lấy danh sách tất cả vật tư' })
+  @ApiOperation({ summary: 'Lấy danh sách vật tư với phân trang và tìm kiếm' })
+  @ApiQuery({ name: 'status', description: 'Lọc theo trạng thái', required: false, enum: ['BINH_THUONG', 'CAN_NHAP_THEM'] })
+  @ApiQuery({ name: 'search', description: 'Tìm kiếm theo mã, tên, mô tả', required: false })
+  @ApiQuery({ name: 'page', description: 'Số trang (bắt đầu từ 1)', required: false, type: Number })
+  @ApiQuery({ name: 'limit', description: 'Số lượng mỗi trang', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Danh sách vật tư' })
-  findAllSupplies() {
-    return this.supplyService.findAllSupplies();
+  findAllSupplies(
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : undefined;
+    const limitNum = limit ? parseInt(limit, 10) : undefined;
+    
+    return this.supplyService.findAllSuppliesWithPagination({
+      status,
+      search,
+      page: pageNum,
+      limit: limitNum,
+    });
   }
 
   @Post(':id/adjust-stock')

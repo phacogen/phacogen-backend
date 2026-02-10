@@ -17,6 +17,44 @@ export class RoleService {
     return this.roleModel.find().exec();
   }
 
+  async findAllWithPagination(params: {
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    data: Role[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const { search, page = 1, limit = 10 } = params;
+
+    const filter: any = {};
+
+    if (search) {
+      filter.tenVaiTro = { $regex: search, $options: 'i' };
+    }
+
+    const skip = (page - 1) * limit;
+    const total = await this.roleModel.countDocuments(filter).exec();
+
+    const data = await this.roleModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .exec();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
   async findOne(id: string): Promise<Role> {
     return this.roleModel.findById(id).exec();
   }

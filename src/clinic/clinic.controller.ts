@@ -26,10 +26,28 @@ export class ClinicController {
 
   @Get()
   @Permissions(Permission.CLINIC_VIEW)
-  @ApiOperation({ summary: 'Lấy danh sách tất cả phòng khám' })
+  @ApiOperation({ summary: 'Lấy danh sách phòng khám với phân trang và tìm kiếm' })
+  @ApiQuery({ name: 'status', description: 'Lọc theo trạng thái hoạt động', required: false, type: Boolean })
+  @ApiQuery({ name: 'search', description: 'Tìm kiếm theo tên, mã, địa chỉ, chuyên khoa', required: false })
+  @ApiQuery({ name: 'page', description: 'Số trang (bắt đầu từ 1)', required: false, type: Number })
+  @ApiQuery({ name: 'limit', description: 'Số lượng mỗi trang', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Danh sách phòng khám' })
-  findAll() {
-    return this.clinicService.findAll();
+  findAll(
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : undefined;
+    const limitNum = limit ? parseInt(limit, 10) : undefined;
+    const statusBool = status === 'true' ? true : status === 'false' ? false : undefined;
+    
+    return this.clinicService.findAllWithPagination({
+      status: statusBool,
+      search,
+      page: pageNum,
+      limit: limitNum,
+    });
   }
 
   @Get('nearby')

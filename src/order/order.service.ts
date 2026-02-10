@@ -16,6 +16,49 @@ export class OrderService {
     return this.orderModel.find(filter).exec();
   }
 
+  async findAllWithPagination(params: {
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    data: Order[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const { status, search, page = 1, limit = 10 } = params;
+
+    const filter: any = {};
+
+    if (status) {
+      filter.trangThai = status;
+    }
+
+    if (search) {
+      filter.maPhieu = { $regex: search, $options: 'i' };
+    }
+
+    const skip = (page - 1) * limit;
+    const total = await this.orderModel.countDocuments(filter).exec();
+
+    const data = await this.orderModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .exec();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
   async findOne(id: string): Promise<Order> {
     return this.orderModel.findById(id).exec();
   }

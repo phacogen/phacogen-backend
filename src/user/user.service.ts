@@ -16,6 +16,59 @@ export class UserService {
     return this.userModel.find().populate('vaiTro').exec();
   }
 
+  async findAllWithPagination(params: {
+    role?: string;
+    status?: boolean;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    data: User[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const { role, status, search, page = 1, limit = 10 } = params;
+
+    const filter: any = {};
+
+    if (role) {
+      filter.vaiTro = role;
+    }
+
+    if (status !== undefined) {
+      filter.dangHoatDong = status;
+    }
+
+    if (search) {
+      filter.$or = [
+        { hoTen: { $regex: search, $options: 'i' } },
+        { maNhanVien: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+    const total = await this.userModel.countDocuments(filter).exec();
+
+    const data = await this.userModel
+      .find(filter)
+      .populate('vaiTro')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .exec();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
   async findOne(id: string): Promise<User> {
     return this.userModel.findById(id).populate('vaiTro').exec();
   }

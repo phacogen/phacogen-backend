@@ -27,10 +27,31 @@ export class UserController {
 
   @Get()
   @Permissions(Permission.EMPLOYEE_VIEW)
-  @ApiOperation({ summary: 'Lấy danh sách tất cả người dùng' })
+  @ApiOperation({ summary: 'Lấy danh sách người dùng với phân trang và tìm kiếm' })
+  @ApiQuery({ name: 'role', description: 'Lọc theo vai trò (ID)', required: false })
+  @ApiQuery({ name: 'status', description: 'Lọc theo trạng thái hoạt động', required: false, type: Boolean })
+  @ApiQuery({ name: 'search', description: 'Tìm kiếm theo tên, mã nhân viên, email', required: false })
+  @ApiQuery({ name: 'page', description: 'Số trang (bắt đầu từ 1)', required: false, type: Number })
+  @ApiQuery({ name: 'limit', description: 'Số lượng mỗi trang', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Danh sách người dùng' })
-  findAll() {
-    return this.userService.findAll();
+  findAll(
+    @Query('role') role?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : undefined;
+    const limitNum = limit ? parseInt(limit, 10) : undefined;
+    const statusBool = status === 'true' ? true : status === 'false' ? false : undefined;
+    
+    return this.userService.findAllWithPagination({
+      role,
+      status: statusBool,
+      search,
+      page: pageNum,
+      limit: limitNum,
+    });
   }
 
   @Get('nearest')

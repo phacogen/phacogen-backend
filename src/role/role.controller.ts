@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { RoleService } from './role.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
@@ -34,10 +34,24 @@ export class RoleController {
 
   @Get()
   @Permissions(Permission.ROLE_VIEW)
-  @ApiOperation({ summary: 'Lấy danh sách tất cả vai trò' })
+  @ApiOperation({ summary: 'Lấy danh sách vai trò với phân trang và tìm kiếm' })
+  @ApiQuery({ name: 'search', description: 'Tìm kiếm theo tên vai trò', required: false })
+  @ApiQuery({ name: 'page', description: 'Số trang (bắt đầu từ 1)', required: false, type: Number })
+  @ApiQuery({ name: 'limit', description: 'Số lượng mỗi trang', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Danh sách vai trò' })
-  findAll() {
-    return this.roleService.findAll();
+  findAll(
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : undefined;
+    const limitNum = limit ? parseInt(limit, 10) : undefined;
+    
+    return this.roleService.findAllWithPagination({
+      search,
+      page: pageNum,
+      limit: limitNum,
+    });
   }
 
   @Get('permissions/list')
