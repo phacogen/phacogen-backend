@@ -1,26 +1,27 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiConsumes, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
-import { SupplyService } from './supply.service';
-import { CreateSupplyDto } from './dto/create-supply.dto';
-import { UpdateSupplyDto } from './dto/update-supply.dto';
-import { CreateAllocationDto } from './dto/create-allocation.dto';
-import { ConfirmDeliveryDto } from './dto/confirm-delivery.dto';
-import { AdjustStockDto } from './dto/adjust-stock.dto';
-import { PrepareAllocationDto } from './dto/prepare-allocation.dto';
+import { Permissions } from '../auth/decorators/permissions.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
-import { Permissions } from '../auth/decorators/permissions.decorator';
 import { Permission } from '../role/schemas/role.schema';
+import { AdjustStockDto } from './dto/adjust-stock.dto';
+import { ConfirmDeliveryDto } from './dto/confirm-delivery.dto';
+import { CreateAllocationDto } from './dto/create-allocation.dto';
+import { CreateSupplyDto } from './dto/create-supply.dto';
+import { PrepareAllocationDto } from './dto/prepare-allocation.dto';
+import { UpdateSupplyDto } from './dto/update-supply.dto';
+import { SupplyService } from './supply.service';
 
 @ApiTags('supply')
 @ApiBearerAuth('JWT-auth')
 @Controller('supply')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class SupplyController {
-  constructor(private readonly supplyService: SupplyService) {}
+  constructor(private readonly supplyService: SupplyService) { }
 
   // ============ UPLOAD ẢNH ============
 
@@ -39,14 +40,16 @@ export class SupplyController {
       },
     },
   })
-  @ApiResponse({ status: 200, description: 'Upload thành công', schema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      filename: { type: 'string' },
-      path: { type: 'string' },
-    },
-  }})
+  @ApiResponse({
+    status: 200, description: 'Upload thành công', schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        filename: { type: 'string' },
+        path: { type: 'string' },
+      },
+    }
+  })
   @ApiResponse({ status: 400, description: 'File không hợp lệ' })
   @UseInterceptors(
     FileInterceptor('file', {
@@ -84,14 +87,16 @@ export class SupplyController {
       },
     },
   })
-  @ApiResponse({ status: 200, description: 'Upload thành công', schema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      filename: { type: 'string' },
-      path: { type: 'string' },
-    },
-  }})
+  @ApiResponse({
+    status: 200, description: 'Upload thành công', schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        filename: { type: 'string' },
+        path: { type: 'string' },
+      },
+    }
+  })
   @ApiResponse({ status: 400, description: 'File không hợp lệ' })
   @UseInterceptors(
     FileInterceptor('file', {
@@ -138,7 +143,7 @@ export class SupplyController {
   ) {
     const pageNum = page ? parseInt(page, 10) : undefined;
     const limitNum = limit ? parseInt(limit, 10) : undefined;
-    
+
     return this.supplyService.findAllSuppliesWithPagination({
       status,
       search,
@@ -249,6 +254,16 @@ export class SupplyController {
     return this.supplyService.prepareAllocation(id, prepareAllocationDto);
   }
 
+  @Put('allocations/:id')
+  @ApiOperation({ summary: 'Cập nhật phiếu cấp phát (chỉ khi ở trạng thái chờ chuẩn bị)' })
+  @ApiParam({ name: 'id', description: 'ID phiếu cấp phát' })
+  @ApiResponse({ status: 200, description: 'Cập nhật phiếu thành công' })
+  @ApiResponse({ status: 400, description: 'Không thể sửa phiếu hoặc không đủ tồn kho' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy phiếu cấp phát' })
+  updateAllocation(@Param('id') id: string, @Body() updateAllocationDto: CreateAllocationDto) {
+    return this.supplyService.updateAllocation(id, updateAllocationDto);
+  }
+
   @Post('allocations/:id/confirm-delivery')
   @ApiOperation({ summary: 'Xác nhận đã giao hàng' })
   @ApiParam({ name: 'id', description: 'ID phiếu cấp phát' })
@@ -275,5 +290,43 @@ export class SupplyController {
   @ApiResponse({ status: 404, description: 'Không tìm thấy phiếu cấp phát' })
   markZaloSent(@Param('id') id: string) {
     return this.supplyService.markZaloSent(id);
+  }
+
+  @Get('allocations/template/download')
+  @ApiOperation({ summary: 'Tải file Excel mẫu cho nhập phiếu cấp phát' })
+  @ApiResponse({ status: 200, description: 'File Excel mẫu' })
+  async downloadTemplate(@Res() res: Response) {
+    const { buffer, filename } = await this.supplyService.generateExcelTemplate();
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }
+
+  @Post('allocations/import/excel')
+  @ApiOperation({ summary: 'Nhập phiếu cấp phát từ file Excel' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+        nguoiTaoPhieu: {
+          type: 'string',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Nhập thành công' })
+  @ApiResponse({ status: 400, description: 'File không hợp lệ hoặc dữ liệu sai' })
+  @UseInterceptors(FileInterceptor('file'))
+  async importFromExcel(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('nguoiTaoPhieu') nguoiTaoPhieu: string,
+  ) {
+    return this.supplyService.importAllocationsFromExcel(file, nguoiTaoPhieu);
   }
 }
