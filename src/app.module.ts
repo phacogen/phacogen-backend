@@ -17,11 +17,17 @@ import { SupplyModule } from './supply/supply.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
-      isGlobal: true, // Makes ConfigModule available globally
+      isGlobal: true, 
       envFilePath: '.env', // Path to .env file
     }),
     ScheduleModule.forRoot(), // Enable scheduled tasks
-    MongooseModule.forRoot(process.env.MONGODB_URI || 'mongodb+srv://uyenptforimex_db_user:Ptuylht090821@cluster0.z6zymcn.mongodb.net/thumauxetnghiem?retryWrites=true&w=majority'),
+    MongooseModule.forRoot(process.env.MONGODB_URI || 'mongodb+srv://uyenptforimex_db_user:Ptuylht090821@cluster0.z6zymcn.mongodb.net/thumauxetnghiem?retryWrites=true&w=majority', {
+      tls: true,
+      tlsAllowInvalidCertificates: true,
+      tlsAllowInvalidHostnames: true,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    }),
     AuthModule,
     UserModule,
     RoleModule,
