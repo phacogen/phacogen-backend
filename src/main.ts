@@ -1,9 +1,9 @@
 import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { join } from 'path';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as express from 'express';
+import { join } from 'path';
+import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -12,10 +12,11 @@ async function bootstrap() {
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-  // Enable CORS
   app.enableCors({
-    origin: 'http://localhost:3000',
+    origin: true, // cho phép mọi origin
     credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
   // Serve static files from uploads directory
@@ -57,10 +58,12 @@ async function bootstrap() {
       persistAuthorization: true, // Giữ token khi refresh trang
     },
   });
+  const port = process.env.PORT || 5001;
 
-  await app.listen(5001);
-  console.log('🚀 Backend is running on http://localhost:5001');
-  console.log('📚 Swagger documentation available at http://localhost:5001/api-docs');
+  await app.listen(port);
+
+  console.log(`🚀 Backend is running on http://localhost:${port}`);
+  console.log(`📚 Swagger documentation available at http://localhost:${port}/api-docs`);
 }
 
 bootstrap();
