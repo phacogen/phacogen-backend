@@ -74,6 +74,13 @@ export class UserService {
   }
 
   async update(id: string, data: any): Promise<User> {
+    // If password is being updated, hash it first
+    if (data.password) {
+      const bcrypt = require('bcrypt');
+      const salt = await bcrypt.genSalt(10);
+      data.password = await bcrypt.hash(data.password, salt);
+    }
+    
     return this.userModel.findByIdAndUpdate(id, data, { new: true }).populate('vaiTro').exec();
   }
 

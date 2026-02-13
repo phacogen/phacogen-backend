@@ -1,16 +1,16 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as XLSX from 'xlsx';
-import { Supply, SupplyDocument, SupplyStatus } from './schemas/supply.schema';
-import { SupplyAllocation, SupplyAllocationDocument, AllocationStatus, DeliveryMethod } from './schemas/supply-allocation.schema';
-import { SupplyHistory, SupplyHistoryDocument, HistoryType } from './schemas/supply-history.schema';
-import { CreateSupplyDto } from './dto/create-supply.dto';
-import { UpdateSupplyDto } from './dto/update-supply.dto';
-import { CreateAllocationDto } from './dto/create-allocation.dto';
-import { ConfirmDeliveryDto } from './dto/confirm-delivery.dto';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
+import { ConfirmDeliveryDto } from './dto/confirm-delivery.dto';
+import { CreateAllocationDto } from './dto/create-allocation.dto';
+import { CreateSupplyDto } from './dto/create-supply.dto';
 import { PrepareAllocationDto } from './dto/prepare-allocation.dto';
+import { UpdateSupplyDto } from './dto/update-supply.dto';
+import { AllocationStatus, DeliveryMethod, SupplyAllocation, SupplyAllocationDocument } from './schemas/supply-allocation.schema';
+import { HistoryType, SupplyHistory, SupplyHistoryDocument } from './schemas/supply-history.schema';
+import { Supply, SupplyDocument, SupplyStatus } from './schemas/supply.schema';
 
 @Injectable()
 export class SupplyService {
@@ -21,7 +21,7 @@ export class SupplyService {
     private allocationModel: Model<SupplyAllocationDocument>,
     @InjectModel(SupplyHistory.name)
     private historyModel: Model<SupplyHistoryDocument>,
-  ) {}
+  ) { }
 
   // ============ QUẢN LÝ VẬT TƯ ============
 
@@ -93,14 +93,14 @@ export class SupplyService {
     const supply = await this.supplyModel
       .findByIdAndUpdate(id, updateSupplyDto, { new: true })
       .exec();
-    
+
     if (!supply) {
       throw new NotFoundException('Không tìm thấy vật tư');
     }
 
     // Cập nhật trạng thái dựa trên tồn kho
     await this.updateSupplyStatus(id);
-    
+
     return supply;
   }
 
@@ -114,7 +114,7 @@ export class SupplyService {
   // Điều chỉnh tồn kho
   async adjustStock(id: string, adjustStockDto: AdjustStockDto): Promise<SupplyDocument> {
     const supply = await this.findSupplyById(id);
-    
+
     const newStock = supply.tonKho + adjustStockDto.soLuong;
     if (newStock < 0) {
       throw new BadRequestException('Số lượng tồn kho không thể âm');
@@ -142,9 +142,9 @@ export class SupplyService {
   // Cập nhật trạng thái vật tư dựa trên tồn kho
   private async updateSupplyStatus(id: string): Promise<void> {
     const supply = await this.findSupplyById(id);
-    
-    const newStatus = supply.tonKho < supply.mucToiThieu 
-      ? SupplyStatus.CAN_NHAP_THEM 
+
+    const newStatus = supply.tonKho < supply.mucToiThieu
+      ? SupplyStatus.CAN_NHAP_THEM
       : SupplyStatus.BINH_THUONG;
 
     if (supply.trangThai !== newStatus) {
@@ -165,7 +165,7 @@ export class SupplyService {
     const minute = String(now.getMinutes()).padStart(2, '0');
     const second = String(now.getSeconds()).padStart(2, '0');
     const random = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
-    
+
     const maPhieu = `PC${day}${month}${year}${hour}${minute}${second}${random}`;
 
     // Kiểm tra tồn kho đủ không
@@ -200,32 +200,32 @@ export class SupplyService {
     totalPages: number;
   }> {
     const { status, search, page = 1, limit = 10 } = params || {};
-    
+
     const filter: any = {};
-    
+
     if (status) {
       filter.trangThai = status;
     }
-    
+
     // Search by maPhieu or clinic name
     if (search) {
       // First, find clinics matching the search term
       const clinics = await this.allocationModel.db.collection('clinics').find({
         tenPhongKham: { $regex: search, $options: 'i' }
       }).toArray();
-      
+
       const clinicIds = clinics.map(c => c._id);
-      
+
       // Search by maPhieu OR clinic name
       filter.$or = [
         { maPhieu: { $regex: search, $options: 'i' } },
         { phongKham: { $in: clinicIds } }
       ];
     }
-    
+
     const skip = (page - 1) * limit;
     const total = await this.allocationModel.countDocuments(filter).exec();
-    
+
     const data = await this.allocationModel
       .find(filter)
       .populate('nguoiTaoPhieu', 'hoTen')
@@ -235,7 +235,7 @@ export class SupplyService {
       .skip(skip)
       .limit(limit)
       .exec();
-    
+
     return {
       data,
       total,
@@ -252,18 +252,18 @@ export class SupplyService {
       .populate('phongKham')
       .populate('nguoiGiaoHang', 'hoTen')
       .exec();
-    
+
     if (!allocation) {
       throw new NotFoundException('Không tìm thấy phiếu cấp phát');
     }
-    
+
     return allocation;
   }
 
   // Cập nhật phiếu cấp phát (chỉ cho phép khi ở trạng thái CHO_CHUAN_BI)
   async updateAllocation(id: string, updateData: Partial<CreateAllocationDto>): Promise<SupplyAllocationDocument> {
     const allocation = await this.findAllocationById(id);
-    
+
     // Chỉ cho phép sửa khi phiếu ở trạng thái chờ chuẩn bị
     if (allocation.trangThai !== AllocationStatus.CHO_CHUAN_BI) {
       throw new BadRequestException('Chỉ có thể sửa phiếu ở trạng thái chờ chuẩn bị');
@@ -289,7 +289,7 @@ export class SupplyService {
   // Chuẩn bị hàng - Cập nhật hạn sử dụng và trừ tồn kho
   async prepareAllocation(id: string, prepareAllocationDto: PrepareAllocationDto): Promise<SupplyAllocationDocument> {
     const allocation = await this.findAllocationById(id);
-    
+
     if (allocation.trangThai !== AllocationStatus.CHO_CHUAN_BI) {
       throw new BadRequestException('Phiếu không ở trạng thái chờ chuẩn bị');
     }
@@ -299,7 +299,7 @@ export class SupplyService {
       const supplyItem = allocation.danhSachVatTu.find(
         item => item.vatTu.toString() === expiryItem.vatTu
       );
-      
+
       if (supplyItem) {
         supplyItem.hanSuDung = new Date(expiryItem.hanSuDung);
       }
@@ -308,7 +308,7 @@ export class SupplyService {
     // Trừ tồn kho
     for (const item of allocation.danhSachVatTu) {
       const supply = await this.findSupplyById(item.vatTu.toString());
-      
+
       if (supply.tonKho < item.soLuong) {
         throw new BadRequestException(
           `Vật tư "${supply.tenVatTu}" không đủ số lượng`
@@ -340,7 +340,7 @@ export class SupplyService {
   // Xác nhận đã giao
   async confirmDelivery(id: string, confirmDeliveryDto: ConfirmDeliveryDto): Promise<SupplyAllocationDocument> {
     const allocation = await this.findAllocationById(id);
-    
+
     if (allocation.trangThai !== AllocationStatus.CHUAN_BI_HANG) {
       throw new BadRequestException('Phiếu không ở trạng thái chuẩn bị hàng');
     }
@@ -360,9 +360,9 @@ export class SupplyService {
     const allocation = await this.findAllocationById(id);
 
     // Nếu đã chuẩn bị hàng hoặc đã giao, hoàn lại kho
-    if (allocation.trangThai === AllocationStatus.CHUAN_BI_HANG || 
-        allocation.trangThai === AllocationStatus.DA_GIAO) {
-      
+    if (allocation.trangThai === AllocationStatus.CHUAN_BI_HANG ||
+      allocation.trangThai === AllocationStatus.DA_GIAO) {
+
       for (const item of allocation.danhSachVatTu) {
         const supply = await this.findSupplyById(item.vatTu.toString());
         supply.tonKho += item.soLuong;
@@ -392,11 +392,11 @@ export class SupplyService {
     const allocation = await this.allocationModel
       .findByIdAndUpdate(id, { daGuiZalo: true }, { new: true })
       .exec();
-    
+
     if (!allocation) {
       throw new NotFoundException('Không tìm thấy phiếu cấp phát');
     }
-    
+
     return allocation;
   }
 
@@ -408,9 +408,9 @@ export class SupplyService {
   }): Promise<SupplyHistoryDocument[]> {
     // Convert string to ObjectId for proper MongoDB query
     const objectId = new Types.ObjectId(supplyId);
-    
+
     const filter: any = { vatTu: objectId };
-    
+
     if (params?.startDate || params?.endDate) {
       filter.thoiGian = {};
       if (params.startDate) {
@@ -429,7 +429,7 @@ export class SupplyService {
       .populate('phieuCapPhat', 'maPhieu')
       .sort({ thoiGian: -1 })
       .exec();
-    
+
     return history;
   }
 
@@ -496,7 +496,7 @@ export class SupplyService {
 
     // Generate buffer
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-    
+
     return {
       buffer,
       filename: `Mau_Nhap_Cap_Phat_${new Date().toISOString().split('T')[0]}.xlsx`,
@@ -512,11 +512,11 @@ export class SupplyService {
       // Read Excel file
       const workbook = XLSX.read(file.buffer, { type: 'buffer' });
       const sheetName = workbook.SheetNames[0];
-      
+
       if (!sheetName) {
         throw new BadRequestException('File Excel không có sheet nào');
       }
-      
+
       const worksheet = workbook.Sheets[sheetName];
       const data: any[] = XLSX.utils.sheet_to_json(worksheet);
 
@@ -605,14 +605,14 @@ export class SupplyService {
       // Validate stock BEFORE creating any allocations
       // Track total usage across ALL allocations to prevent overselling
       const totalSupplyUsage: Map<string, number> = new Map();
-      
+
       for (const [, items] of groupedByClinic.entries()) {
         for (const item of items) {
           const currentUsage = totalSupplyUsage.get(item.vatTu) || 0;
           totalSupplyUsage.set(item.vatTu, currentUsage + item.soLuong);
         }
       }
-      
+
       // Check if we have enough stock for ALL allocations combined
       for (const [supplyId, totalQty] of totalSupplyUsage.entries()) {
         const supply = await this.findSupplyById(supplyId);
@@ -627,7 +627,7 @@ export class SupplyService {
       const createdAllocations = [];
       for (const [, items] of groupedByClinic.entries()) {
         const firstItem = items[0];
-        
+
         const allocationDto: CreateAllocationDto = {
           phongKham: firstItem.phongKham,
           hinhThucVanChuyen: firstItem.hinhThucVanChuyen as DeliveryMethod,
@@ -641,7 +641,7 @@ export class SupplyService {
 
         const allocation = await this.createAllocation(allocationDto);
         createdAllocations.push(allocation);
-        
+
         // Small delay to ensure unique timestamps
         await new Promise(resolve => setTimeout(resolve, 10));
       }
@@ -653,17 +653,190 @@ export class SupplyService {
       };
     } catch (error) {
       console.error('Excel import error:', error);
-      
+
       if (error instanceof BadRequestException) {
         throw error;
       }
-      
+
       // Log more details about the error
       if (error instanceof Error) {
         console.error('Error details:', error.message, error.stack);
       }
-      
+
       throw new BadRequestException('Không thể đọc file Excel. Vui lòng kiểm tra định dạng file.');
     }
   }
+
+  // ============ BÁO CÁO TỒN KHO ============
+
+  async getInventoryReport(params?: {
+    phongKham?: string;
+    vatTu?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any> {
+    const { phongKham, vatTu, startDate, endDate } = params || {};
+
+    // Build filter for allocations
+    const allocationFilter: any = {
+      trangThai: AllocationStatus.DA_GIAO,
+    };
+
+    if (phongKham) {
+      allocationFilter.phongKham = new Types.ObjectId(phongKham);
+    }
+
+    if (startDate || endDate) {
+      allocationFilter.ngayGiao = {};
+      if (startDate) {
+        allocationFilter.ngayGiao.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        allocationFilter.ngayGiao.$lte = new Date(endDate);
+      }
+    }
+
+    // Get all delivered allocations with populated data
+    const allocations = await this.allocationModel
+      .find(allocationFilter)
+      .populate('phongKham')
+      .exec();
+
+    // Get all supplies
+    const supplies = await this.supplyModel.find().exec();
+
+    // Build report data - one row per (supply, clinic) combination
+    const reportData: any[] = [];
+    const clinicSupplyMap: Map<string, any> = new Map();
+
+    // First, collect all usage data by clinic and supply
+    for (const allocation of allocations) {
+      const clinicId = allocation.phongKham._id.toString();
+      const clinicName = (allocation.phongKham as any).tenPhongKham;
+
+      for (const supplyItem of allocation.danhSachVatTu) {
+        const supplyId = supplyItem.vatTu.toString();
+        const key = `${clinicId}_${supplyId}`;
+
+        if (!clinicSupplyMap.has(key)) {
+          clinicSupplyMap.set(key, {
+            clinicId,
+            clinicName,
+            supplyId,
+            soLuongCap: 0,
+            soLuongDaDung: 0,
+          });
+        }
+
+        const entry = clinicSupplyMap.get(key);
+        entry.soLuongCap += supplyItem.soLuong;
+        entry.soLuongDaDung += supplyItem.soLuong; // Assume all allocated is used
+      }
+    }
+
+    // Now create report rows
+    for (const supply of supplies) {
+      // Skip if filtering by specific supply
+      if (vatTu && supply._id.toString() !== vatTu) {
+        continue;
+      }
+
+      const supplyId = supply._id.toString();
+
+      // Find all clinics that received this supply
+      const clinicsForSupply: any[] = [];
+      for (const [key, entry] of clinicSupplyMap.entries()) {
+        if (entry.supplyId === supplyId) {
+          clinicsForSupply.push(entry);
+        }
+      }
+
+      // If no clinics received this supply, create one row with zero usage
+      if (clinicsForSupply.length === 0) {
+        const tonKho = supply.tonKho;
+        const canhBaoNgay = 'N/A';
+        const canhBaoTonKho = this.calculateStockWarning(tonKho, supply.mucToiThieu);
+
+        reportData.push({
+          _id: `${supply._id}_no_clinic`,
+          maVatTu: supply.maVatTu,
+          tenVatTu: supply.tenVatTu,
+          donVi: supply.donVi,
+          tenPhongKham: 'Chưa cấp',
+          soLuongCap: 0,
+          soLuongDaDung: 0,
+          soLuongTon: tonKho,
+          mucToiThieu: supply.mucToiThieu,
+          canhBaoNgay,
+          canhBaoTonKho,
+        });
+      } else {
+        // Create one row for each clinic
+        for (const clinicEntry of clinicsForSupply) {
+          const tonKho = supply.tonKho;
+          const canhBaoNgay = this.calculateDateWarning(
+            tonKho,
+            clinicEntry.soLuongDaDung,
+            startDate,
+            endDate
+          );
+          const canhBaoTonKho = this.calculateStockWarning(tonKho, supply.mucToiThieu);
+
+          reportData.push({
+            _id: `${supply._id}_${clinicEntry.clinicId}`,
+            maVatTu: supply.maVatTu,
+            tenVatTu: supply.tenVatTu,
+            donVi: supply.donVi,
+            tenPhongKham: clinicEntry.clinicName,
+            soLuongCap: clinicEntry.soLuongCap,
+            soLuongDaDung: clinicEntry.soLuongDaDung,
+            soLuongTon: tonKho,
+            mucToiThieu: supply.mucToiThieu,
+            canhBaoNgay,
+            canhBaoTonKho,
+          });
+        }
+      }
+    }
+
+    return reportData;
+  }
+
+  private calculateDateWarning(tonKho: number, used: number, startDate?: string, endDate?: string): string {
+    if (!startDate || !endDate) {
+      return 'N/A';
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (days <= 0 || used <= 0) {
+      return 'N/A';
+    }
+
+    const dailyUsage = used / days;
+    const daysRemaining = Math.floor(tonKho / dailyUsage);
+
+    if (daysRemaining <= 0) {
+      return 'Hết đúng cú';
+    } else if (daysRemaining <= 3) {
+      return 'Lâu không gửi mẫu';
+    } else if (daysRemaining <= 7) {
+      return 'Bảo hết';
+    }
+
+    return 'N/A';
+  }
+
+  private calculateStockWarning(tonKho: number, mucToiThieu: number): number {
+    // Return number of months the current stock can last
+    // This is a simplified calculation
+    if (mucToiThieu <= 0) {
+      return 0;
+    }
+
+    return Math.floor(tonKho / mucToiThieu);
+  }
 }
+

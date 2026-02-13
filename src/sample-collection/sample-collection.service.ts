@@ -123,6 +123,7 @@ export class SampleCollectionService {
   async findAllWithPagination(params: {
     status?: string;
     search?: string;
+    employeeId?: string;
     page?: number;
     limit?: number;
   }): Promise<{
@@ -132,7 +133,9 @@ export class SampleCollectionService {
     limit: number;
     totalPages: number;
   }> {
-    const { status, search, page = 1, limit = 10 } = params;
+    const { status, search, employeeId, page = 1, limit = 10 } = params;
+
+    console.log('=== findAllWithPagination params ===', { status, search, employeeId, page, limit });
 
     // Build query filter
     const filter: any = {};
@@ -142,9 +145,18 @@ export class SampleCollectionService {
       filter.trangThai = status;
     }
 
+    // Filter by employee (creator OR assigned staff)
+    if (employeeId) {
+      console.log('Adding employee filter for:', employeeId);
+      filter.$or = [
+        { nguoiGiaoLenh: employeeId },
+        { nhanVienThucHien: employeeId }
+      ];
+    }
+
     // Search by maLenh or noiDungCongViec
     if (search) {
-      filter.$or = [
+      const searchConditions: any[] = [
         { maLenh: { $regex: search, $options: 'i' } }, // Case-insensitive search
       ];
 
@@ -156,17 +168,32 @@ export class SampleCollectionService {
       }).toArray();
 
       if (workContents.length > 0) {
-        filter.$or.push({
+        searchConditions.push({
           noiDungCongViec: { $in: workContents.map(wc => wc._id) }
         });
+      }
+
+      // If employeeId filter exists, combine with AND
+      if (employeeId) {
+        filter.$and = [
+          { $or: filter.$or }, // Employee filter
+          { $or: searchConditions } // Search filter
+        ];
+        delete filter.$or;
+      } else {
+        filter.$or = searchConditions;
       }
     }
 
     // Calculate skip
     const skip = (page - 1) * limit;
 
+    console.log('Final filter:', JSON.stringify(filter, null, 2));
+
     // Get total count
     const total = await this.sampleCollectionModel.countDocuments(filter).exec();
+
+    console.log('Total documents found:', total);
 
     // Get paginated data
     const data = await this.sampleCollectionModel

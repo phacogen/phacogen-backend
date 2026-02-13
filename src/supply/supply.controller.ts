@@ -329,4 +329,27 @@ export class SupplyController {
   ) {
     return this.supplyService.importAllocationsFromExcel(file, nguoiTaoPhieu);
   }
+
+  // ============ BÁO CÁO TỒN KHO ============
+
+  @Get('reports/inventory')
+  @ApiOperation({ summary: 'Báo cáo tồn kho tổng hợp' })
+  @ApiQuery({ name: 'phongKham', description: 'Lọc theo phòng khám', required: false })
+  @ApiQuery({ name: 'vatTu', description: 'Lọc theo vật tư', required: false })
+  @ApiQuery({ name: 'startDate', description: 'Ngày bắt đầu (ISO format)', required: false })
+  @ApiQuery({ name: 'endDate', description: 'Ngày kết thúc (ISO format)', required: false })
+  @ApiResponse({ status: 200, description: 'Báo cáo tồn kho' })
+  getInventoryReport(
+    @Query('phongKham') phongKham?: string,
+    @Query('vatTu') vatTu?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.supplyService.getInventoryReport({
+      phongKham,
+      vatTu,
+      startDate,
+      endDate,
+    });
+  }
 }
