@@ -124,6 +124,7 @@ export class SampleCollectionService {
     status?: string;
     search?: string;
     employeeId?: string;
+    clinicId?: string;
     page?: number;
     limit?: number;
   }): Promise<{
@@ -133,25 +134,38 @@ export class SampleCollectionService {
     limit: number;
     totalPages: number;
   }> {
-    const { status, search, employeeId, page = 1, limit = 10 } = params;
+    const { status, search, employeeId, clinicId, page = 1, limit = 10 } = params;
 
-    console.log('=== findAllWithPagination params ===', { status, search, employeeId, page, limit });
+    console.log('=== findAllWithPagination params ===', { status, search, employeeId, clinicId, page, limit });
 
     // Build query filter
     const filter: any = {};
+    const andConditions: any[] = [];
 
     // Filter by status
     if (status) {
       filter.trangThai = status;
     }
 
+    // Filter by clinic (search in phongKhamItems array OR old phongKham field)
+    if (clinicId) {
+      andConditions.push({
+        $or: [
+          { 'phongKhamItems.phongKham': clinicId },
+          { 'phongKham': clinicId }
+        ]
+      });
+    }
+
     // Filter by employee (creator OR assigned staff)
     if (employeeId) {
-      console.log('Adding employee filter for:', employeeId);
-      filter.$or = [
-        { nguoiGiaoLenh: employeeId },
-        { nhanVienThucHien: employeeId }
-      ];
+
+      andConditions.push({
+        $or: [
+          { nguoiGiaoLenh: employeeId },
+          { nhanVienThucHien: employeeId }
+        ]
+      });
     }
 
     // Search by maLenh or noiDungCongViec
@@ -173,16 +187,12 @@ export class SampleCollectionService {
         });
       }
 
-      // If employeeId filter exists, combine with AND
-      if (employeeId) {
-        filter.$and = [
-          { $or: filter.$or }, // Employee filter
-          { $or: searchConditions } // Search filter
-        ];
-        delete filter.$or;
-      } else {
-        filter.$or = searchConditions;
-      }
+      andConditions.push({ $or: searchConditions });
+    }
+
+    // Combine all conditions with $and if there are multiple
+    if (andConditions.length > 0) {
+      filter.$and = andConditions;
     }
 
     // Calculate skip
@@ -448,7 +458,7 @@ export class SampleCollectionService {
               if (clinic && clinic.email) {
                 // Lấy ảnh hoàn thành kiểm tra của phòng khám này
                 const imageUrls = item.anhHoanThanhKiemTra || [];
-                
+
                 const emailResult = await this.emailService.sendCompletionEmail(
                   clinic.email,
                   clinic.tenPhongKham,
@@ -971,7 +981,7 @@ export class SampleCollectionService {
   async handleAutoCreateOrders() {
     try {
       console.log('Running auto-create orders cron job...');
-      
+
       // Lấy admin đầu tiên làm người giao lệnh
       const admins = await this.getAdminUsers();
       if (admins.length === 0) {
@@ -981,7 +991,7 @@ export class SampleCollectionService {
 
       const nguoiGiaoLenh = admins[0]._id.toString();
       const result = await this.autoCreateOrders(nguoiGiaoLenh);
-      
+
       console.log(`Auto-create orders completed: ${result.created} created, ${result.skipped} skipped`);
       if (result.errors.length > 0) {
         console.error('Auto-create orders errors:', result.errors);
@@ -1032,7 +1042,7 @@ export class SampleCollectionService {
           }
           // Tính thời gian hẹn hoàn thành: 2 giờ sau khi tạo (10:00 sáng nếu tạo lúc 8:00 sáng)
           const thoiGianHenHoanThanh = new Date(Date.now() + 2 * 60 * 60 * 1000);
-          
+
           const orderData = {
             noiDungCongViec: cauHinh.noiDungCongViecMacDinh,
             nguoiGiaoLenh,
@@ -1076,7 +1086,7 @@ export class SampleCollectionService {
     nguoiThucHien: string
   ): Promise<SampleCollection> {
     const order = await this.findOne(id);
-    
+
     if (!order) {
       throw new Error('Không tìm thấy lệnh thu mẫu');
     }
@@ -1106,7 +1116,7 @@ export class SampleCollectionService {
     nguoiThucHien: string
   ): Promise<SampleCollection> {
     const order = await this.findOne(id);
-    
+
     if (!order) {
       throw new Error('Không tìm thấy lệnh thu mẫu');
     }
