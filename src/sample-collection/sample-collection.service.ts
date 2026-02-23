@@ -557,21 +557,130 @@ export class SampleCollectionService {
   }
 
   async exportToExcel(): Promise<any> {
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Lệnh Thu Mẫu');
+
+    // Fetch data
     const collections = await this.sampleCollectionModel
       .find()
       .populate('phongKhamItems.phongKham')
       .populate('noiDungCongViec')
       .populate('nguoiGiaoLenh')
       .populate('nhanVienThucHien')
+      .sort({ createdAt: -1 })
       .exec();
 
-    // Return data for Excel export
-    // Frontend will handle the actual Excel generation
-    return {
-      success: true,
-      data: collections,
-      message: 'Data ready for export',
+    // Define columns
+    worksheet.columns = [
+      { header: 'Mã lệnh', key: 'maLenh', width: 15 },
+      { header: 'Phòng khám / Nhà xe', key: 'phongKham', width: 30 },
+      { header: 'Nội dung công việc', key: 'noiDungCongViec', width: 25 },
+      { header: 'Trạng thái', key: 'trangThai', width: 20 },
+      { header: 'Ưu tiên', key: 'uuTien', width: 10 },
+      { header: 'Người giao lệnh', key: 'nguoiGiaoLenh', width: 20 },
+      { header: 'Nhân viên thực hiện', key: 'nhanVienThucHien', width: 20 },
+      { header: 'Thời gian tạo', key: 'createdAt', width: 20 },
+      { header: 'Hạn hoàn thành', key: 'thoiGianHenHoanThanh', width: 20 },
+      { header: 'Ghi chú', key: 'ghiChu', width: 30 },
+      { header: 'Cước nhận mẫu', key: 'soTienCuocNhanMau', width: 15 },
+      { header: 'Phí ship', key: 'soTienShip', width: 15 },
+      { header: 'Phí gửi xe', key: 'soTienGuiXe', width: 15 },
+      { header: 'Tổng tiền', key: 'tongTien', width: 15 },
+    ];
+
+    // Style header row
+    worksheet.getRow(1).font = { bold: true, size: 12 };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF4472C4' },
     };
+    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Status labels mapping
+    const statusLabels: Record<string, string> = {
+      CHO_DIEU_PHOI: 'Chờ điều phối',
+      DANG_THUC_HIEN: 'Đang thực hiện',
+      HOAN_THANH: 'Hoàn thành',
+      HOAN_THANH_KIEM_TRA: 'Hoàn thành kiểm tra',
+      DA_HUY: 'Đã hủy',
+    };
+
+    // Add data rows
+    collections.forEach((collection: any) => {
+      // Get clinic/bus station name
+      let phongKhamName = '';
+      if (collection.tenNhaXe) {
+        phongKhamName = `🚌 ${collection.tenNhaXe}`;
+      } else if (collection.phongKhamItems && collection.phongKhamItems.length > 0) {
+        const firstClinic = collection.phongKhamItems[0].phongKham;
+        phongKhamName = firstClinic?.tenPhongKham || 'N/A';
+      }
+
+      // Calculate total money
+      let tongTien = 0;
+      if (collection.phongKhamItems && collection.phongKhamItems.length > 0) {
+        collection.phongKhamItems.forEach((item: any) => {
+          tongTien += (item.soTienCuocNhanMau || 0) + (item.soTienShip || 0) + (item.soTienGuiXe || 0);
+        });
+      }
+
+      const row = worksheet.addRow({
+        maLenh: collection.maLenh,
+        phongKham: phongKhamName,
+        noiDungCongViec: collection.noiDungCongViec?.tenCongViec || 'N/A',
+        trangThai: statusLabels[collection.trangThai] || collection.trangThai,
+        uuTien: collection.uuTien ? 'Gấp' : 'Bình thường',
+        nguoiGiaoLenh: collection.nguoiGiaoLenh?.hoTen || 'N/A',
+        nhanVienThucHien: collection.nhanVienThucHien?.hoTen || 'Chưa phân công',
+        createdAt: collection.createdAt ? new Date(collection.createdAt).toLocaleString('vi-VN') : '',
+        thoiGianHenHoanThanh: collection.thoiGianHenHoanThanh
+          ? new Date(collection.thoiGianHenHoanThanh).toLocaleString('vi-VN')
+          : 'Không có',
+        ghiChu: collection.ghiChu || '',
+        soTienCuocNhanMau:
+          collection.phongKhamItems && collection.phongKhamItems.length > 0
+            ? collection.phongKhamItems[0].soTienCuocNhanMau || 0
+            : 0,
+        soTienShip:
+          collection.phongKhamItems && collection.phongKhamItems.length > 0
+            ? collection.phongKhamItems[0].soTienShip || 0
+            : 0,
+        soTienGuiXe:
+          collection.phongKhamItems && collection.phongKhamItems.length > 0
+            ? collection.phongKhamItems[0].soTienGuiXe || 0
+            : 0,
+        tongTien: tongTien,
+      });
+
+      // Format money columns
+      [11, 12, 13, 14].forEach((colNum) => {
+        const cell = row.getCell(colNum);
+        cell.numFmt = '#,##0';
+      });
+
+      // Highlight urgent orders
+      if (collection.uuTien) {
+        row.getCell(5).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFCCCC' },
+        };
+      }
+    });
+
+    // Auto-fit columns (approximate)
+    worksheet.columns.forEach((column) => {
+      if (column.width && column.width < 10) {
+        column.width = 10;
+      }
+    });
+
+    // Generate buffer
+    const buffer = await workbook.xlsx.writeBuffer();
+    return buffer;
   }
 
   // Lấy lịch sử tiến trình của lệnh

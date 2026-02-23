@@ -9,8 +9,8 @@ export class WorkSchedule extends Document {
   @Prop({ required: true })
   date: string; // Format: YYYY-MM-DD
 
-  @Prop({ required: true })
-  caLamViec: string; // FULL_CA, CA_1, CA_2, etc.
+  @Prop({ type: [String], required: true })
+  caLamViec: string[]; // Array of shifts: ['CA_1', 'CA_2'], ['FULL_CA'], ['OFF'], etc.
 }
 
 export const WorkScheduleSchema = SchemaFactory.createForClass(WorkSchedule);

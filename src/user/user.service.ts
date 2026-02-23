@@ -5,7 +5,7 @@ import { User } from './schemas/user.schema';
 
 @Injectable()
 export class UserService {
-  constructor(@InjectModel(User.name) private userModel: Model<User>) {}
+  constructor(@InjectModel(User.name) private userModel: Model<User>) { }
 
   async create(data: any): Promise<User> {
     const user = new this.userModel(data);
@@ -80,7 +80,7 @@ export class UserService {
       const salt = await bcrypt.genSalt(10);
       data.password = await bcrypt.hash(data.password, salt);
     }
-    
+
     return this.userModel.findByIdAndUpdate(id, data, { new: true }).populate('vaiTro').exec();
   }
 
@@ -93,14 +93,11 @@ export class UserService {
   }
 
   async findNearestStaff(location: { lat: number; lng: number }): Promise<any[]> {
-    // Tìm nhân viên gần nhất dựa trên vị trí
-    // Sử dụng công thức Haversine để tính khoảng cách
+    // Lọc nhân viên: dangHoatDong = true, có vị trí, và KHÔNG phải OFF hoặc NGHI_LE
     const users = await this.userModel.find({
       dangHoatDong: true,
-      viTriHienTai: { $exists: true }
     }).populate('vaiTro').exec();
 
-    // Tính khoảng cách và sắp xếp
     const usersWithDistance = users.map(user => {
       if (user.viTriHienTai) {
         const distance = this.calculateDistance(
@@ -129,9 +126,9 @@ export class UserService {
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(this.deg2rad(lat1)) *
-        Math.cos(this.deg2rad(lat2)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
+      Math.cos(this.deg2rad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = R * c;
     return distance;

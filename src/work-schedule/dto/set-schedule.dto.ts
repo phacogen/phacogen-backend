@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, Matches } from 'class-validator';
+import { IsString, IsNotEmpty, Matches, IsArray, ArrayNotEmpty } from 'class-validator';
 
 export class SetScheduleDto {
   @ApiProperty({ example: '507f1f77bcf86cd799439011', description: 'ID người dùng' })
@@ -14,11 +14,13 @@ export class SetScheduleDto {
   date: string;
 
   @ApiProperty({ 
-    example: 'FULL_CA', 
-    description: 'Ca làm việc',
+    example: ['FULL_CA'], 
+    description: 'Ca làm việc (có thể chọn nhiều ca)',
+    type: [String],
     enum: ['FULL_CA', 'CA_1', 'CA_2', 'CA_3', 'CA_1_CA_2', 'MOT_PHAN_2_SANG', 'MOT_PHAN_2_CHIEU', 'OFF_SANG', 'OFF_CHIEU', 'MOT_PHAN', 'OFF', 'NGHI_LE']
   })
-  @IsString()
-  @IsNotEmpty()
-  caLamViec: string;
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  caLamViec: string[];
 }

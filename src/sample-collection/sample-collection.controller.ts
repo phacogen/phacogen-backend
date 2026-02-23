@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UploadedFiles, UseInterceptors, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res, UploadedFiles, UseInterceptors, UseGuards } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Response } from 'express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { AssignStaffDto } from './dto/assign-staff.dto';
@@ -60,8 +61,16 @@ export class SampleCollectionController {
   @Get('export/excel')
   @ApiOperation({ summary: 'Xuất danh sách lệnh nhận mẫu ra Excel' })
   @ApiResponse({ status: 200, description: 'File Excel' })
-  async exportExcel() {
-    return this.sampleCollectionService.exportToExcel();
+  async exportExcel(@Res() res: Response) {
+    const buffer = await this.sampleCollectionService.exportToExcel();
+    
+    const filename = `lenh-thu-mau-${Date.now()}.xlsx`;
+    
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    
+    res.send(buffer);
   }
 
   @Get('stats/summary')
