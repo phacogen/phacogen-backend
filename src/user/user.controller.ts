@@ -10,7 +10,7 @@ import { Permissions } from '../auth/decorators/permissions.decorator';
 import { Permission } from '../role/schemas/role.schema';
 
 @ApiTags('users')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('users')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class UserController {

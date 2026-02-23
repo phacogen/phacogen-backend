@@ -14,7 +14,7 @@ import { Permissions } from '../auth/decorators/permissions.decorator';
 import { Permission } from '../role/schemas/role.schema';
 
 @ApiTags('sample-collections')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('sample-collections')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class SampleCollectionController {

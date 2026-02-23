@@ -446,12 +446,16 @@ export class SampleCollectionService {
             for (const item of result.phongKhamItems) {
               const clinic = item.phongKham as any;
               if (clinic && clinic.email) {
+                // Lấy ảnh hoàn thành kiểm tra của phòng khám này
+                const imageUrls = item.anhHoanThanhKiemTra || [];
+                
                 const emailResult = await this.emailService.sendCompletionEmail(
                   clinic.email,
                   clinic.tenPhongKham,
                   result.maLenh,
                   new Date(),
                   employeeName,
+                  imageUrls, // Truyền ảnh vào
                 );
                 console.log(`Email ${emailResult.success ? 'sent successfully' : 'failed'} to ${clinic.email} for order ${result.maLenh}`);
               }
@@ -647,12 +651,16 @@ export class SampleCollectionService {
         continue;
       }
 
+      // Lấy ảnh hoàn thành kiểm tra của phòng khám này
+      const imageUrls = item.anhHoanThanhKiemTra || [];
+
       const result = await this.emailService.sendCompletionEmail(
         clinic.email,
         clinic.tenPhongKham,
         collection.maLenh,
         new Date(),
         employeeName,
+        imageUrls, // Truyền ảnh vào
       );
 
       if (result.success) {
@@ -849,8 +857,8 @@ export class SampleCollectionService {
     await this.sendOverdueNotifications();
   }
 
-  // Cron job tự động tạo lệnh mỗi ngày lúc 6:00 sáng
-  @Cron('0 6 * * *')
+  // Cron job tự động tạo lệnh mỗi ngày lúc 8:00 sáng
+  @Cron('0 8 * * *')
   async handleAutoCreateOrders() {
     try {
       console.log('Running auto-create orders cron job...');
@@ -913,6 +921,9 @@ export class SampleCollectionService {
             skipped++;
             continue;
           }
+          // Tính thời gian hẹn hoàn thành: 2 giờ sau khi tạo (10:00 sáng nếu tạo lúc 8:00 sáng)
+          const thoiGianHenHoanThanh = new Date(Date.now() + 2 * 60 * 60 * 1000);
+          
           const orderData = {
             noiDungCongViec: cauHinh.noiDungCongViecMacDinh,
             nguoiGiaoLenh,
@@ -920,9 +931,7 @@ export class SampleCollectionService {
             uuTien: cauHinh.lenhUuTien || false,
             nhanVienThucHien: clinic.nhanVienPhuTrach || undefined,
             trangThai: SampleCollectionStatus.DANG_THUC_HIEN,
-            thoiGianHenHoanThanh: cauHinh.thoiGianHenHoanThanh
-              ? new Date(Date.now() + cauHinh.thoiGianHenHoanThanh * 60 * 60 * 1000)
-              : undefined,
+            thoiGianHenHoanThanh,
             phongKhamItems: [{
               phongKham: clinic._id.toString(),
               soTienCuocNhanMau: 0,

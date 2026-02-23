@@ -9,7 +9,7 @@ import { Permissions } from '../auth/decorators/permissions.decorator';
 import { Permission } from '../role/schemas/role.schema';
 
 @ApiTags('work-contents')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('work-contents')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class WorkContentController {

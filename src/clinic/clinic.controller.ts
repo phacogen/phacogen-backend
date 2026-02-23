@@ -9,7 +9,7 @@ import { Permissions } from '../auth/decorators/permissions.decorator';
 import { Permission } from '../role/schemas/role.schema';
 
 @ApiTags('clinics')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('clinics')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class ClinicController {

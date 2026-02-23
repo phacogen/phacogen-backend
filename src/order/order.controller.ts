@@ -11,7 +11,7 @@ import { Permissions } from '../auth/decorators/permissions.decorator';
 import { Permission } from '../role/schemas/role.schema';
 
 @ApiTags('orders')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('orders')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class OrderController {

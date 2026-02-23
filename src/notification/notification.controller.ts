@@ -8,7 +8,7 @@ import { Permissions } from '../auth/decorators/permissions.decorator';
 import { Permission } from '../role/schemas/role.schema';
 
 @ApiTags('notifications')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('notifications')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class NotificationController {

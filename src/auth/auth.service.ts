@@ -95,15 +95,18 @@ export class AuthService {
       return null;
     }
 
+    // Lấy permissions trước khi convert to object
+    const vaiTro = user.vaiTro as any;
+    const permissions = vaiTro?.permissions || [];
+    
+    // Convert to plain object
     const userObject = user.toObject();
     delete userObject.password;
     
-    // Thêm permissions vào user object
-    const permissions = (user.vaiTro as any)?.permissions || [];
-    
+    // Trả về user object với permissions ở top level
     return {
       ...userObject,
-      permissions,
+      permissions, // Đảm bảo permissions luôn có ở top level
     };
   }
 

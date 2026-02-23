@@ -39,9 +39,28 @@ export class EmailService {
     orderCode: string,
     completionTime: Date,
     employeeName?: string,
+    imageUrls: string[] = [], // Thêm tham số ảnh
   ): Promise<{ success: boolean; message: string }> {
     try {
       const smtpFrom = this.configService.get<string>('SMTP_FROM') || this.configService.get<string>('SMTP_USER');
+      
+      // Tạo HTML hiển thị ảnh inline
+      const imageHtml = imageUrls.map((url, index) => {
+        const cid = `image${index}@phacogen.com`;
+        return `
+          <div style="margin: 10px 0;">
+            <img src="cid:${cid}" alt="Ảnh ${index + 1}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
+            <p style="margin: 5px 0 0 0; font-size: 12px; color: #666; text-align: center;">Ảnh ${index + 1}</p>
+          </div>
+        `;
+      }).join('');
+      
+      // Tạo attachments từ image URLs
+      const attachments = imageUrls.map((url, index) => ({
+        filename: `anh-hoan-thanh-${index + 1}.jpg`,
+        path: url,
+        cid: `image${index}@phacogen.com`,
+      }));
       
       const mailOptions = {
         from: smtpFrom,
@@ -82,6 +101,14 @@ export class EmailService {
                 </p>
               </div>
               
+              <!-- Hình ảnh hoàn thành -->
+              ${imageUrls.length > 0 ? `
+              <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+                <h3 style="margin: 0 0 15px 0; color: #333; font-size: 16px;">📷 Hình ảnh hoàn thành</h3>
+                ${imageHtml}
+              </div>
+              ` : ''}
+              
               <!-- Thông báo bổ sung -->
               <div style="background-color: #fff3e0; padding: 15px; border-radius: 8px; border-left: 4px solid #ff9800; margin-bottom: 25px;">
                 <p style="margin: 0; font-size: 14px; color: #666; line-height: 1.6;">
@@ -119,6 +146,7 @@ export class EmailService {
             </div>
           </div>
         `,
+        attachments, // Đính kèm ảnh
       };
 
       await this.transporter.sendMail(mailOptions);
@@ -153,9 +181,23 @@ export class EmailService {
       const smtpFrom = this.configService.get<string>('SMTP_FROM') || 
                        this.configService.get<string>('SMTP_USER');
       
-      const imageLinks = imageUrls.map((url, index) => 
-        `<a href="${url}" target="_blank" style="color: #1976d2; text-decoration: none;">Ảnh ${index + 1}</a>`
-      ).join(' | ');
+      // Tạo HTML hiển thị ảnh inline
+      const imageHtml = imageUrls.map((url, index) => {
+        const cid = `image${index}@phacogen.com`;
+        return `
+          <div style="margin: 10px 0;">
+            <img src="cid:${cid}" alt="Ảnh ${index + 1}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
+            <p style="margin: 5px 0 0 0; font-size: 12px; color: #666; text-align: center;">Ảnh ${index + 1}</p>
+          </div>
+        `;
+      }).join('');
+      
+      // Tạo attachments từ image URLs
+      const attachments = imageUrls.map((url, index) => ({
+        filename: `anh-hoan-thanh-${index + 1}.jpg`,
+        path: url,
+        cid: `image${index}@phacogen.com`, // Content ID để nhúng ảnh vào HTML
+      }));
       
       const mailOptions = {
         from: smtpFrom,
@@ -239,13 +281,11 @@ export class EmailService {
                 </table>
               </div>
               
-              <!-- Hình ảnh -->
+              <!-- Hình ảnh hoàn thành -->
               ${imageUrls.length > 0 ? `
               <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3 style="margin: 0 0 15px 0; color: #333; font-size: 16px;">📷 Hình ảnh hoàn thành</h3>
-                <p style="margin: 0; font-size: 14px; color: #333;">
-                  ${imageLinks}
-                </p>
+                ${imageHtml}
               </div>
               ` : ''}
               
@@ -279,6 +319,7 @@ export class EmailService {
             </div>
           </div>
         `,
+        attachments, // Đính kèm ảnh
       };
 
       await this.transporter.sendMail(mailOptions);

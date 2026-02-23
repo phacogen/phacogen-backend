@@ -8,7 +8,7 @@ import { Permissions } from '../auth/decorators/permissions.decorator';
 import { Permission } from '../role/schemas/role.schema';
 
 @ApiTags('work-schedules')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('work-schedules')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class WorkScheduleController {
