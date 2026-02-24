@@ -8,6 +8,9 @@ export enum CaLamViec {
   CA_2 = 'CA_2',                 // Ca 2 (13:00 - 17:00)
   CA_3 = 'CA_3',                 // Ca 3 (17:00 - 21:00)
   CA_1_CA_2 = 'CA_1_CA_2',       // Ca 1, Ca 2 (Cả ngày - làm nhiều hơn 1 ca)
+  CA_2_CA_3 = 'CA_2_CA_3',       // Ca 2, Ca 3 (Chiều + Tối)
+  CA_1_CA_3 = 'CA_1_CA_3',       // Ca 1, Ca 3 (Sáng + Tối)
+  CA_1_CA_2_CA_3 = 'CA_1_CA_2_CA_3', // Ca 1, Ca 2, Ca 3 (Cả ngày + Tối)
   MOT_PHAN_2_SANG = 'MOT_PHAN_2_SANG',   // 1/2P (S) - Nghỉ có phép buổi sáng, làm việc: 13:00 - 17:00
   MOT_PHAN_2_CHIEU = 'MOT_PHAN_2_CHIEU', // 1/2P (C) - Nghỉ có phép buổi chiều, làm việc: 08:00 - 12:00
   OFF_SANG = 'OFF_SANG',         // OFF (S) - Nghỉ buổi sáng (không trừ phép), làm việc: 13:00 - 17:00

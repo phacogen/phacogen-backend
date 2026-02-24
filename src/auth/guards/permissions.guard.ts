@@ -8,6 +8,70 @@ export class PermissionsGuard implements CanActivate {
 
   constructor(private reflector: Reflector) {}
 
+  /**
+   * Permission dependencies - some permissions automatically grant read access to related resources
+   * This prevents permission conflicts where a feature needs to read data from another module
+   */
+  private readonly permissionDependencies: Record<string, Permission[]> = {
+    // Schedule management needs to read users
+    [Permission.SCHEDULE_VIEW]: [Permission.EMPLOYEE_VIEW],
+    [Permission.SCHEDULE_CREATE]: [Permission.EMPLOYEE_VIEW],
+    [Permission.SCHEDULE_UPDATE]: [Permission.EMPLOYEE_VIEW],
+    [Permission.SCHEDULE_ASSIGN]: [Permission.EMPLOYEE_VIEW],
+    
+    // Order management needs to read users, clinics, and work content
+    [Permission.ORDER_VIEW]: [Permission.EMPLOYEE_VIEW, Permission.CLINIC_VIEW, Permission.WORK_CONTENT_VIEW],
+    [Permission.ORDER_CREATE]: [Permission.EMPLOYEE_VIEW, Permission.CLINIC_VIEW, Permission.WORK_CONTENT_VIEW],
+    [Permission.ORDER_UPDATE]: [Permission.EMPLOYEE_VIEW, Permission.CLINIC_VIEW, Permission.WORK_CONTENT_VIEW],
+    [Permission.ORDER_ASSIGN]: [Permission.EMPLOYEE_VIEW, Permission.CLINIC_VIEW],
+    [Permission.ORDER_DETAIL_VIEW]: [Permission.EMPLOYEE_VIEW, Permission.CLINIC_VIEW, Permission.WORK_CONTENT_VIEW],
+    
+    // Allocation management needs to read clinics and supplies
+    [Permission.ALLOCATION_VIEW]: [Permission.CLINIC_VIEW, Permission.SUPPLY_VIEW],
+    [Permission.ALLOCATION_CREATE]: [Permission.CLINIC_VIEW, Permission.SUPPLY_VIEW],
+    [Permission.ALLOCATION_UPDATE]: [Permission.CLINIC_VIEW, Permission.SUPPLY_VIEW],
+    [Permission.ALLOCATION_DETAIL_VIEW]: [Permission.CLINIC_VIEW, Permission.SUPPLY_VIEW],
+    
+    // Dashboard and reports need to read everything
+    [Permission.DASHBOARD_VIEW]: [
+      Permission.ORDER_VIEW,
+      Permission.EMPLOYEE_VIEW,
+      Permission.CLINIC_VIEW,
+      Permission.SUPPLY_VIEW,
+      Permission.WORK_CONTENT_VIEW,
+    ],
+    [Permission.REPORT_VIEW]: [
+      Permission.ORDER_VIEW,
+      Permission.EMPLOYEE_VIEW,
+      Permission.CLINIC_VIEW,
+      Permission.SUPPLY_VIEW,
+      Permission.ALLOCATION_VIEW,
+    ],
+    [Permission.STATISTICS_VIEW]: [
+      Permission.ORDER_VIEW,
+      Permission.EMPLOYEE_VIEW,
+      Permission.CLINIC_VIEW,
+      Permission.SUPPLY_VIEW,
+    ],
+  };
+
+  /**
+   * Get all permissions including dependencies
+   */
+  private getEffectivePermissions(userPermissions: Permission[]): Set<Permission> {
+    const effectivePermissions = new Set<Permission>(userPermissions);
+    
+    // Add dependent permissions
+    for (const permission of userPermissions) {
+      const dependencies = this.permissionDependencies[permission];
+      if (dependencies) {
+        dependencies.forEach(dep => effectivePermissions.add(dep));
+      }
+    }
+    
+    return effectivePermissions;
+  }
+
   canActivate(context: ExecutionContext): boolean {
     const requiredPermissions = this.reflector.getAllAndOverride<Permission[]>('permissions', [
       context.getHandler(),
@@ -23,10 +87,7 @@ export class PermissionsGuard implements CanActivate {
 
     this.logger.debug(`Required permissions: ${JSON.stringify(requiredPermissions)}`);
     this.logger.debug(`User: ${JSON.stringify(user?._id)}`);
-    this.logger.debug(`User object: ${JSON.stringify(user)}`);
     this.logger.debug(`User permissions: ${JSON.stringify(user?.permissions)}`);
-    this.logger.debug(`User permissions type: ${typeof user?.permissions}`);
-    this.logger.debug(`User permissions is array: ${Array.isArray(user?.permissions)}`);
 
     if (!user) {
       this.logger.warn('No user in request');
@@ -39,9 +100,14 @@ export class PermissionsGuard implements CanActivate {
       return true;
     }
 
-    // Kiểm tra xem user có quyền yêu cầu không
+    // Get effective permissions including dependencies
+    const effectivePermissions = this.getEffectivePermissions(user.permissions);
+    
+    this.logger.debug(`Effective permissions: ${JSON.stringify(Array.from(effectivePermissions))}`);
+
+    // Kiểm tra xem user có quyền yêu cầu không (bao gồm cả quyền phụ thuộc)
     const hasPermission = requiredPermissions.some((permission) =>
-      user.permissions.includes(permission),
+      effectivePermissions.has(permission),
     );
 
     if (!hasPermission) {
