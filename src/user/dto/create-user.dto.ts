@@ -36,11 +36,11 @@ export class CreateUserDto {
   @ApiPropertyOptional({ example: true, description: 'Trạng thái hoạt động', default: true })
   dangHoatDong?: boolean;
 
-  @ApiPropertyOptional({ 
-    example: 'OFF', 
+  @ApiPropertyOptional({
+    example: 'FULL_CA',
     description: 'Ca làm việc',
     enum: ['FULL_CA', 'CA_1', 'CA_2', 'CA_3', 'CA_1_CA_2', 'MOT_PHAN_2_SANG', 'MOT_PHAN_2_CHIEU', 'OFF_SANG', 'OFF_CHIEU', 'MOT_PHAN', 'OFF', 'NGHI_LE'],
-    default: 'OFF'
+    default: 'FULL_CA'
   })
   caLamViec?: string;
 }

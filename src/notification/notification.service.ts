@@ -3,17 +3,38 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Notification, NotificationDocument } from './schemas/notification.schema';
 import { CreateNotificationDto } from './dto/create-notification.dto';
+import { PushNotificationService } from '../push-notification/push-notification.service';
 
 @Injectable()
 export class NotificationService {
   constructor(
     @InjectModel(Notification.name)
     private notificationModel: Model<NotificationDocument>,
+    private pushNotificationService: PushNotificationService,
   ) {}
 
   async create(createNotificationDto: CreateNotificationDto): Promise<Notification> {
     const notification = new this.notificationModel(createNotificationDto);
-    return notification.save();
+    const savedNotification = await notification.save();
+
+    // Gửi push notification
+    try {
+      await this.pushNotificationService.sendToUser(
+        createNotificationDto.userId.toString(),
+        createNotificationDto.title,
+        createNotificationDto.message,
+        {
+          type: createNotificationDto.type,
+          relatedOrderId: createNotificationDto.relatedOrderId?.toString(),
+          notificationId: savedNotification._id.toString(),
+        },
+      );
+    } catch (error) {
+      // Log error nhưng không fail việc tạo notification
+      console.error('Failed to send push notification:', error);
+    }
+
+    return savedNotification;
   }
 
   async findByUserId(userId: string): Promise<any[]> {

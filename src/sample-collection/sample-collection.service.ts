@@ -127,6 +127,7 @@ export class SampleCollectionService {
     clinicId?: string;
     page?: number;
     limit?: number;
+    currentUser?: any;
   }): Promise<{
     data: SampleCollection[];
     total: number;
@@ -134,7 +135,7 @@ export class SampleCollectionService {
     limit: number;
     totalPages: number;
   }> {
-    const { status, search, employeeId, clinicId, page = 1, limit = 10 } = params;
+    const { status, search, employeeId, clinicId, page = 1, limit = 10, currentUser } = params;
 
     console.log('=== findAllWithPagination params ===', { status, search, employeeId, clinicId, page, limit });
 
@@ -157,16 +158,29 @@ export class SampleCollectionService {
       });
     }
 
-    // Filter by employee (creator OR assigned staff)
-    if (employeeId) {
-
-      andConditions.push({
-        $or: [
-          { nguoiGiaoLenh: employeeId },
-          { nhanVienThucHien: employeeId }
-        ]
-      });
+    // Filter by employee - LOGIC MỚI DỰA TRÊN PERMISSION
+    // Kiểm tra quyền xem lệnh
+    const hasViewAllPermission = currentUser?.permissions?.includes('ORDER_VIEW_ALL');
+    const hasViewOwnPermission = currentUser?.permissions?.includes('ORDER_VIEW_OWN');
+    
+    if (employeeId && !hasViewAllPermission) {
+      // Nếu có quyền ORDER_VIEW_OWN hoặc không có quyền ORDER_VIEW_ALL
+      // Áp dụng logic filter theo status
+      const isCompletedStatus = status === SampleCollectionStatus.HOAN_THANH || 
+                                status === SampleCollectionStatus.HOAN_THANH_KIEM_TRA;
+      
+      if (!isCompletedStatus) {
+        // Với status khác HOAN_THANH và HOAN_THANH_KIEM_TRA: chỉ xem lệnh được giao cho mình
+        andConditions.push({
+          $or: [
+            { nguoiGiaoLenh: employeeId },
+            { nhanVienThucHien: employeeId }
+          ]
+        });
+      }
+      // Với status HOAN_THANH hoặc HOAN_THANH_KIEM_TRA: không filter (xem tất cả)
     }
+    // Nếu có quyền ORDER_VIEW_ALL: không filter theo employeeId (xem tất cả)
 
     // Search by maLenh or noiDungCongViec
     if (search) {
@@ -199,6 +213,7 @@ export class SampleCollectionService {
     const skip = (page - 1) * limit;
 
     console.log('Final filter:', JSON.stringify(filter, null, 2));
+    console.log('User permissions:', currentUser?.permissions, 'hasViewAll:', hasViewAllPermission, 'hasViewOwn:', hasViewOwnPermission);
 
     // Get total count
     const total = await this.sampleCollectionModel.countDocuments(filter).exec();

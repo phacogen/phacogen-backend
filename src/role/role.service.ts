@@ -69,11 +69,28 @@ export class RoleService {
 
   // Seed dữ liệu vai trò mặc định
   async seedDefaultRoles() {
+    // Tìm Admin role
+    const adminRole = await this.roleModel.findOne({ tenVaiTro: 'Admin' }).exec();
+    
+    if (adminRole) {
+      // Update Admin role với tất cả permissions
+      const allPermissions = Object.values(Permission);
+      adminRole.permissions = allPermissions;
+      await adminRole.save();
+      
+      return {
+        message: 'Admin role updated with all permissions',
+        count: allPermissions.length,
+        permissions: allPermissions,
+      };
+    }
+
+    // Nếu chưa có roles, tạo mới
     const existingRoles = await this.roleModel.countDocuments().exec();
     
     if (existingRoles > 0) {
       return {
-        message: 'Roles already exist. Skipping seed.',
+        message: 'Roles already exist but Admin not found',
         count: existingRoles,
       };
     }

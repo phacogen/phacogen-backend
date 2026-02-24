@@ -12,6 +12,7 @@ export const defaultRoles = [
     permissions: [
       Permission.DASHBOARD_VIEW,
       Permission.ORDER_VIEW,
+      Permission.ORDER_VIEW_ALL, // Quản lý xem tất cả lệnh
       Permission.ORDER_CREATE,
       Permission.ORDER_UPDATE,
       Permission.ORDER_ASSIGN,
@@ -40,6 +41,7 @@ export const defaultRoles = [
     permissions: [
       Permission.DASHBOARD_VIEW,
       Permission.ORDER_VIEW,
+      Permission.ORDER_VIEW_OWN, // Nhân viên chỉ xem lệnh của mình
       Permission.ORDER_UPDATE,
       Permission.ORDER_DETAIL_VIEW,
       Permission.SCHEDULE_VIEW,

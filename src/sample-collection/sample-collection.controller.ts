@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res, UploadedFiles, UseInterceptors, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, Res, UploadedFiles, UseInterceptors, UseGuards } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
@@ -47,9 +47,13 @@ export class SampleCollectionController {
     @Query('clinicId') clinicId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Req() req?: any,
   ) {
     const pageNum = page ? parseInt(page, 10) : undefined;
     const limitNum = limit ? parseInt(limit, 10) : undefined;
+    
+    // Lấy user từ request (được set bởi JwtAuthGuard)
+    const user = req?.user;
     
     return this.sampleCollectionService.findAllWithPagination({
       status,
@@ -58,6 +62,7 @@ export class SampleCollectionController {
       clinicId,
       page: pageNum,
       limit: limitNum,
+      currentUser: user,
     });
   }
 

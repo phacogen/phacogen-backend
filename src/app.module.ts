@@ -13,6 +13,7 @@ import { SupplyModule } from './supply/supply.module';
 import { UserModule } from './user/user.module';
 import { WorkContentModule } from './work-content/work-content.module';
 import { WorkScheduleModule } from './work-schedule/work-schedule.module';
+import { PushNotificationModule } from './push-notification/push-notification.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { WorkScheduleModule } from './work-schedule/work-schedule.module';
     WorkContentModule,
     NotificationModule,
     SupplyModule,
+    PushNotificationModule,
   ],
 })
 export class AppModule { }

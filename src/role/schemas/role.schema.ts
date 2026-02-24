@@ -5,6 +5,8 @@ import { Document } from 'mongoose';
 export enum Permission {
   // Quản lý lệnh
   ORDER_VIEW = 'ORDER_VIEW',
+  ORDER_VIEW_ALL = 'ORDER_VIEW_ALL', // Xem tất cả lệnh (không bị giới hạn)
+  ORDER_VIEW_OWN = 'ORDER_VIEW_OWN', // Chỉ xem lệnh của mình
   ORDER_CREATE = 'ORDER_CREATE',
   ORDER_UPDATE = 'ORDER_UPDATE',
   ORDER_DELETE = 'ORDER_DELETE',
