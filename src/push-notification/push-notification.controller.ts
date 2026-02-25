@@ -1,20 +1,20 @@
 import {
-  Controller,
-  Post,
-  Get,
-  Put,
-  Delete,
   Body,
-  UseGuards,
+  Controller,
+  Delete,
+  Get,
+  Post,
+  Put,
   Request,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { PushNotificationService } from './push-notification.service';
 import { RegisterDeviceDto } from './dto/register-device.dto';
+import { TestNotificationDto } from './dto/test-notification.dto';
 import { UnregisterDeviceDto } from './dto/unregister-device.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
-import { TestNotificationDto } from './dto/test-notification.dto';
+import { PushNotificationService } from './push-notification.service';
 
 @ApiTags('Push Notifications')
 @Controller('push-notifications')
@@ -23,19 +23,19 @@ import { TestNotificationDto } from './dto/test-notification.dto';
 export class PushNotificationController {
   constructor(
     private readonly pushNotificationService: PushNotificationService,
-  ) {}
+  ) { }
 
   @Post('register')
   @ApiOperation({ summary: 'Register device for push notifications' })
   async registerDevice(@Request() req, @Body() dto: RegisterDeviceDto) {
-    return this.pushNotificationService.registerDevice(req.user.userId, dto);
+    return this.pushNotificationService.registerDevice(req.user._id.toString(), dto);
   }
 
   @Delete('unregister')
   @ApiOperation({ summary: 'Unregister device from push notifications' })
   async unregisterDevice(@Request() req, @Body() dto: UnregisterDeviceDto) {
     await this.pushNotificationService.unregisterDevice(
-      req.user.userId,
+      req.user._id.toString(),
       dto.playerId,
     );
     return { message: 'Device unregistered successfully' };
@@ -44,20 +44,20 @@ export class PushNotificationController {
   @Get('devices')
   @ApiOperation({ summary: 'Get user devices' })
   async getUserDevices(@Request() req) {
-    return this.pushNotificationService.getUserDevices(req.user.userId);
+    return this.pushNotificationService.getUserDevices(req.user._id.toString());
   }
 
   @Get('preferences')
   @ApiOperation({ summary: 'Get notification preferences' })
   async getPreferences(@Request() req) {
-    return this.pushNotificationService.getPreferences(req.user.userId);
+    return this.pushNotificationService.getPreferences(req.user._id.toString());
   }
 
   @Put('preferences')
   @ApiOperation({ summary: 'Update notification preferences' })
   async updatePreferences(@Request() req, @Body() dto: UpdatePreferencesDto) {
     return this.pushNotificationService.updatePreferences(
-      req.user.userId,
+      req.user._id.toString(),
       dto,
     );
   }
@@ -69,7 +69,7 @@ export class PushNotificationController {
       dto.title,
       dto.message,
       {
-        userId: dto.userId || req.user.userId,
+        userId: dto.userId || req.user._id.toString(),
         playerId: dto.playerId,
         sendToAll: dto.sendToAll,
       },

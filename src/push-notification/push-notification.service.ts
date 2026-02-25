@@ -1,12 +1,12 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { ConfigService } from '@nestjs/config';
 import * as OneSignal from 'onesignal-node';
-import { UserDevice } from './schemas/user-device.schema';
-import { NotificationPreference } from './schemas/notification-preference.schema';
 import { RegisterDeviceDto } from './dto/register-device.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
+import { NotificationPreference } from './schemas/notification-preference.schema';
+import { UserDevice } from './schemas/user-device.schema';
 
 @Injectable()
 export class PushNotificationService {
@@ -21,6 +21,7 @@ export class PushNotificationService {
     private configService: ConfigService,
   ) {
     const appId = this.configService.get<string>('ONESIGNAL_APP_ID');
+    console.log('ONESIGNAL_APP_ID:', appId);
     const apiKey = this.configService.get<string>('ONESIGNAL_REST_API_KEY');
 
     if (appId && apiKey) {
@@ -156,6 +157,8 @@ export class PushNotificationService {
     data?: any,
   ): Promise<void> {
     try {
+      this.logger.log(`[DEBUG] sendToUser called with userId: ${userId}`);
+      
       if (!this.oneSignalClient) {
         this.logger.warn('OneSignal not configured, skipping push notification');
         return;
@@ -168,6 +171,11 @@ export class PushNotificationService {
       }
 
       const devices = await this.getUserDevices(userId);
+      this.logger.log(`[DEBUG] Found ${devices.length} devices for user ${userId}`);
+      if (devices.length > 0) {
+        this.logger.log(`[DEBUG] Device details: ${JSON.stringify(devices.map(d => ({ playerId: d.playerId, userId: d.userId.toString(), isActive: d.isActive })))}`);
+      }
+      
       if (devices.length === 0) {
         this.logger.debug(`No active devices for user ${userId}`);
         return;
@@ -184,6 +192,7 @@ export class PushNotificationService {
 
       const response = await this.oneSignalClient.createNotification(notification);
       this.logger.log(`Push notification sent to user ${userId}, recipients: ${response.body.recipients}`);
+      this.logger.debug(`OneSignal response: ${JSON.stringify(response.body)}`);
     } catch (error) {
       this.logger.error(`Failed to send push notification to user ${userId}`, error);
     }
@@ -239,7 +248,7 @@ export class PushNotificationService {
 
       const response = await this.oneSignalClient.createNotification(notification);
       this.logger.log(`Test notification sent: ${JSON.stringify(response.body)}`);
-      
+
       return {
         success: true,
         recipients: response.body.recipients,
@@ -266,7 +275,7 @@ export class PushNotificationService {
 
       const response = await this.oneSignalClient.createNotification(notification);
       this.logger.log(`Broadcast notification sent to all users: ${response.body.recipients} recipients`);
-      
+
       return {
         success: true,
         recipients: response.body.recipients,
