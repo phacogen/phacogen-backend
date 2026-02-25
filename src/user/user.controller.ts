@@ -1,9 +1,11 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { Permissions } from '../auth/decorators/permissions.decorator';
@@ -104,5 +106,28 @@ export class UserController {
   @ApiResponse({ status: 404, description: 'Không tìm thấy người dùng' })
   delete(@Param('id') id: string) {
     return this.userService.delete(id);
+  }
+
+  @Get('profile/me')
+  @ApiOperation({ summary: 'Lấy thông tin cá nhân' })
+  @ApiResponse({ status: 200, description: 'Thông tin cá nhân' })
+  getProfile(@Request() req) {
+    return this.userService.getProfile(req.user._id.toString());
+  }
+
+  @Put('profile/me')
+  @ApiOperation({ summary: 'Cập nhật thông tin cá nhân' })
+  @ApiResponse({ status: 200, description: 'Cập nhật thành công' })
+  updateProfile(@Request() req, @Body() dto: UpdateProfileDto) {
+    return this.userService.updateProfile(req.user._id.toString(), dto);
+  }
+
+  @Post('profile/change-password')
+  @ApiOperation({ summary: 'Đổi mật khẩu' })
+  @ApiResponse({ status: 200, description: 'Đổi mật khẩu thành công' })
+  @ApiResponse({ status: 400, description: 'Mật khẩu không hợp lệ' })
+  @ApiResponse({ status: 401, description: 'Mật khẩu hiện tại không đúng' })
+  changePassword(@Request() req, @Body() dto: ChangePasswordDto) {
+    return this.userService.changePassword(req.user._id.toString(), dto);
   }
 }
