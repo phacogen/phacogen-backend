@@ -14,6 +14,7 @@ import { UserModule } from './user/user.module';
 import { WorkContentModule } from './work-content/work-content.module';
 import { WorkScheduleModule } from './work-schedule/work-schedule.module';
 import { PushNotificationModule } from './push-notification/push-notification.module';
+import { BusStationModule } from './bus-station/bus-station.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { PushNotificationModule } from './push-notification/push-notification.mo
     NotificationModule,
     SupplyModule,
     PushNotificationModule,
+    BusStationModule,
   ],
 })
 export class AppModule { }

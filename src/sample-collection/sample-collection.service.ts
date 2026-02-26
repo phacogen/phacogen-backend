@@ -85,11 +85,29 @@ export class SampleCollectionService {
 
     // Tạo thông báo CHỈ cho Admin khi tạo lệnh mới
     const admins = await this.getAdminUsers();
+    
+    // Lấy thông tin phòng khám hoặc nhà xe
+    let locationInfo = '';
+    if (saved.tenNhaXe) {
+      locationInfo = `nhà xe ${saved.tenNhaXe}`;
+    } else if (phongKhamItems.length > 0) {
+      // Populate để lấy tên phòng khám
+      const populatedOrder = await this.sampleCollectionModel
+        .findById(saved._id)
+        .populate('phongKhamItems.phongKham')
+        .exec();
+      
+      if (populatedOrder && populatedOrder.phongKhamItems && populatedOrder.phongKhamItems.length > 0) {
+        const firstClinic = populatedOrder.phongKhamItems[0].phongKham as any;
+        locationInfo = `phòng khám ${firstClinic?.tenPhongKham || 'N/A'}`;
+      }
+    }
+    
     for (const admin of admins) {
       await this.notificationService.create({
         userId: admin._id.toString(),
         title: 'Lệnh thu mẫu mới',
-        message: `Lệnh thu mẫu ${maLenh} đã được tạo`,
+        message: `Lệnh ${maLenh} đã được tạo${locationInfo ? ` tại ${locationInfo}` : ''}${saved.uuTien ? ' (GẤP)' : ''}`,
         type: NotificationType.ORDER_ASSIGNED,
         relatedOrderId: saved._id.toString(),
       });
@@ -322,6 +340,19 @@ export class SampleCollectionService {
 
     // Nếu có giao nhân viên mới (điều phối lệnh)
     if (result && data.nhanVienThucHien && oldData.nhanVienThucHien?.toString() !== data.nhanVienThucHien) {
+      // Lấy thông tin nhân viên được giao
+      const assignedEmployee = await this.userModel.findById(data.nhanVienThucHien).exec();
+      const employeeName = assignedEmployee?.hoTen || 'nhân viên';
+      
+      // Lấy thông tin phòng khám hoặc nhà xe
+      let locationInfo = '';
+      if (result.tenNhaXe) {
+        locationInfo = ` tại nhà xe ${result.tenNhaXe}`;
+      } else if (result.phongKhamItems && result.phongKhamItems.length > 0) {
+        const firstClinic = result.phongKhamItems[0].phongKham as any;
+        locationInfo = ` tại phòng khám ${firstClinic?.tenPhongKham || 'N/A'}`;
+      }
+      
       // Gửi thông báo cho: người được giao, người tạo lệnh, và Admin
       const recipientIds = new Set<string>();
 
@@ -340,12 +371,22 @@ export class SampleCollectionService {
       const admins = await this.getAdminUsers();
       admins.forEach(admin => recipientIds.add(admin._id.toString()));
 
-      // Gửi thông báo cho tất cả người nhận
+      // Gửi thông báo cho tất cả người nhận với thông tin chi tiết
       for (const userId of recipientIds) {
+        // Tùy chỉnh message cho từng người nhận
+        let message = '';
+        if (userId === data.nhanVienThucHien) {
+          // Người được giao
+          message = `Bạn được giao lệnh ${result.maLenh}${locationInfo}${result.uuTien ? ' (GẤP)' : ''}`;
+        } else {
+          // Người tạo lệnh và Admin
+          message = `Lệnh ${result.maLenh} đã được giao cho ${employeeName}${locationInfo}${result.uuTien ? ' (GẤP)' : ''}`;
+        }
+        
         await this.notificationService.create({
           userId,
           title: 'Điều phối lệnh thu mẫu',
-          message: `Lệnh thu mẫu ${result.maLenh} đã được điều phối`,
+          message,
           type: NotificationType.ORDER_ASSIGNED,
           relatedOrderId: id,
         });
@@ -380,12 +421,48 @@ export class SampleCollectionService {
     const admins = await this.getAdminUsers();
     admins.forEach(admin => recipientIds.add(admin._id.toString()));
 
+    // Lấy thông tin phòng khám hoặc nhà xe
+    let locationInfo = '';
+    if (order.tenNhaXe) {
+      locationInfo = ` tại nhà xe ${order.tenNhaXe}`;
+    } else if (order.phongKhamItems && order.phongKhamItems.length > 0) {
+      const firstClinic = order.phongKhamItems[0].phongKham as any;
+      locationInfo = ` tại phòng khám ${firstClinic?.tenPhongKham || 'N/A'}`;
+    }
+    
+    // Lấy tên nhân viên thực hiện
+    const employeeName = order.nhanVienThucHien 
+      ? (typeof order.nhanVienThucHien === 'object' 
+          ? (order.nhanVienThucHien as any).hoTen 
+          : 'nhân viên')
+      : 'nhân viên';
+
     // Gửi thông báo cho tất cả người nhận
     for (const userId of recipientIds) {
+      let message = '';
+      
+      // Tùy chỉnh message dựa trên trạng thái
+      switch (order.trangThai) {
+        case SampleCollectionStatus.DANG_THUC_HIEN:
+          message = `Lệnh ${order.maLenh}${locationInfo} đang được thực hiện bởi ${employeeName}`;
+          break;
+        case SampleCollectionStatus.HOAN_THANH:
+          message = `Lệnh ${order.maLenh}${locationInfo} đã hoàn thành bởi ${employeeName}`;
+          break;
+        case SampleCollectionStatus.HOAN_THANH_KIEM_TRA:
+          message = `Lệnh ${order.maLenh}${locationInfo} đã hoàn thành kiểm tra`;
+          break;
+        case SampleCollectionStatus.DA_HUY:
+          message = `Lệnh ${order.maLenh}${locationInfo} đã bị hủy`;
+          break;
+        default:
+          message = `Lệnh ${order.maLenh}${locationInfo}: ${ghiChu}`;
+      }
+      
       await this.notificationService.create({
         userId,
         title: 'Cập nhật trạng thái lệnh',
-        message: `Lệnh ${order.maLenh} đã chuyển sang trạng thái: ${ghiChu}`,
+        message,
         type: NotificationType.ORDER_STATUS_CHANGED,
         relatedOrderId: order._id.toString(),
       });
@@ -462,42 +539,8 @@ export class SampleCollectionService {
           break;
         case SampleCollectionStatus.HOAN_THANH_KIEM_TRA:
           ghiChu = 'Hoàn thành kiểm tra';
-
-          // Gửi email cho từng phòng khám trong phongKhamItems
-          if (result.phongKhamItems && result.phongKhamItems.length > 0) {
-            const employee = result.nhanVienThucHien as any;
-            const employeeName = employee?.hoTen || 'Nhân viên';
-
-            for (const item of result.phongKhamItems) {
-              const clinic = item.phongKham as any;
-              if (clinic && clinic.email) {
-                // Lấy ảnh hoàn thành kiểm tra của phòng khám này
-                const imageUrls = item.anhHoanThanhKiemTra || [];
-
-                const emailResult = await this.emailService.sendCompletionEmail(
-                  clinic.email,
-                  clinic.tenPhongKham,
-                  result.maLenh,
-                  new Date(),
-                  employeeName,
-                  imageUrls, // Truyền ảnh vào
-                );
-                console.log(`Email ${emailResult.success ? 'sent successfully' : 'failed'} to ${clinic.email} for order ${result.maLenh}`);
-              }
-            }
-
-            if (!additionalData) additionalData = {};
-            additionalData.emailStatus = {
-              success: true,
-              message: `Đã gửi email đến ${result.phongKhamItems.length} phòng khám`,
-            };
-          } else {
-            if (!additionalData) additionalData = {};
-            additionalData.emailStatus = {
-              success: false,
-              message: 'Không có phòng khám nào để gửi email',
-            };
-          }
+          // Email sẽ chỉ được gửi khi người dùng click nút "Gửi lại email"
+          // Không tự động gửi email nữa
           break;
         case SampleCollectionStatus.DA_HUY:
           ghiChu = 'Hủy lệnh';
@@ -804,6 +847,13 @@ export class SampleCollectionService {
       }
     }
 
+    // Nếu gửi thành công ít nhất 1 email, cập nhật emailSentAt
+    if (successCount > 0) {
+      await this.sampleCollectionModel.findByIdAndUpdate(id, {
+        emailSentAt: new Date(),
+      });
+    }
+
     return {
       success: successCount > 0,
       message: `Đã gửi email đến ${successCount}/${collection.phongKhamItems.length} phòng khám`,
@@ -842,6 +892,7 @@ export class SampleCollectionService {
     const collections = await this.sampleCollectionModel
       .find(query)
       .populate('nhanVienThucHien', 'hoTen _id')
+      .populate('phongKhamItems.phongKham')
       .exec();
 
     // Calculate summary stats từ phongKhamItems
@@ -849,6 +900,11 @@ export class SampleCollectionService {
     let tongTienCuocNhanMau = 0;
     let tongTienShip = 0;
     let tongTienGuiXe = 0;
+    let tongKmDiDuoc = 0;
+
+    // Tính tổng km dựa trên khoảng cách đến phòng khám
+    // Giả định: mỗi lệnh = khoảng cách khứ hồi từ văn phòng đến phòng khám
+    const officeLocation = { lat: 10.762622, lng: 106.660172 }; // Tọa độ văn phòng mặc định (TP.HCM)
 
     collections.forEach(c => {
       if (c.phongKhamItems && c.phongKhamItems.length > 0) {
@@ -856,6 +912,19 @@ export class SampleCollectionService {
           tongTienCuocNhanMau += item.soTienCuocNhanMau || 0;
           tongTienShip += item.soTienShip || 0;
           tongTienGuiXe += item.soTienGuiXe || 0;
+
+          // Tính khoảng cách nếu phòng khám có tọa độ
+          const clinic = item.phongKham as any;
+          if (clinic && clinic.toaDo && clinic.toaDo.lat && clinic.toaDo.lng) {
+            const distance = this.calculateDistance(
+              officeLocation.lat,
+              officeLocation.lng,
+              clinic.toaDo.lat,
+              clinic.toaDo.lng
+            );
+            // Nhân 2 để tính khứ hồi
+            tongKmDiDuoc += distance * 2;
+          }
         });
       }
     });
@@ -908,10 +977,29 @@ export class SampleCollectionService {
         tongTienShip,
         tongTienGuiXe,
         tongTatCa: tongTienCuocNhanMau + tongTienShip + tongTienGuiXe,
+        tongKmDiDuoc,
       },
       employeeStats,
       statusDistribution,
     };
+  }
+
+  // Hàm tính khoảng cách Haversine
+  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Bán kính Trái Đất (km)
+    const dLat = this.deg2rad(lat2 - lat1);
+    const dLon = this.deg2rad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c;
+    return distance;
+  }
+
+  private deg2rad(deg: number): number {
+    return deg * (Math.PI / 180);
   }
 
   // Tìm các lệnh quá hạn

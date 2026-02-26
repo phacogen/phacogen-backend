@@ -9,8 +9,8 @@ class CoordinatesDto {
 }
 
 export class CreateClinicDto {
-  @ApiProperty({ example: 'PK001', description: 'Mã phòng khám (unique)' })
-  maPhongKham: string;
+  @ApiPropertyOptional({ example: 'PK001', description: 'Mã phòng khám (tự động sinh nếu không nhập)' })
+  maPhongKham?: string;
 
   @ApiProperty({ example: 'Phòng khám Đa khoa ABC', description: 'Tên phòng khám' })
   tenPhongKham: string;
@@ -69,4 +69,13 @@ export class CreateClinicDto {
 
   @ApiPropertyOptional({ example: 'https://zalo.me/0901234567', description: 'Link Zalo' })
   linkZalo?: string;
+
+  @ApiPropertyOptional({ example: '08:00', description: 'Giờ mở cửa' })
+  gioMoCua?: string;
+
+  @ApiPropertyOptional({ example: '17:00', description: 'Giờ đóng cửa' })
+  gioDongCua?: string;
+
+  @ApiPropertyOptional({ example: [1, 2, 3, 4, 5, 6], description: 'Ngày làm việc trong tuần (0=CN, 1=T2, ..., 6=T7)' })
+  ngayLamViec?: number[];
 }

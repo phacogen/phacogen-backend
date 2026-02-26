@@ -3,9 +3,10 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { SupplyStatus } from '../schemas/supply.schema';
 
 export class CreateSupplyDto {
-  @ApiProperty({ description: 'Mã vật tư', example: 'VT001' })
+  @ApiPropertyOptional({ description: 'Mã vật tư (tự động sinh nếu không nhập)', example: 'VT001' })
+  @IsOptional()
   @IsString()
-  maVatTu: string;
+  maVatTu?: string;
 
   @ApiProperty({ description: 'Tên vật tư', example: 'Bộ dụng cụ CELLPREP' })
   @IsString()

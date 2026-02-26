@@ -26,6 +26,12 @@ export class SupplyService {
   // ============ QUẢN LÝ VẬT TƯ ============
 
   async createSupply(createSupplyDto: CreateSupplyDto): Promise<SupplyDocument> {
+    // Auto-generate maVatTu if not provided
+    if (!createSupplyDto.maVatTu) {
+      const count = await this.supplyModel.countDocuments().exec();
+      createSupplyDto.maVatTu = `VT${String(count + 1).padStart(4, '0')}`;
+    }
+    
     const supply = new this.supplyModel(createSupplyDto);
     return supply.save();
   }

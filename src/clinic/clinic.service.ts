@@ -8,6 +8,12 @@ export class ClinicService {
   constructor(@InjectModel(Clinic.name) private clinicModel: Model<Clinic>) {}
 
   async create(data: any): Promise<Clinic> {
+    // Auto-generate maPhongKham if not provided
+    if (!data.maPhongKham) {
+      const count = await this.clinicModel.countDocuments().exec();
+      data.maPhongKham = `PK${String(count + 1).padStart(4, '0')}`;
+    }
+    
     const clinic = new this.clinicModel(data);
     return clinic.save();
   }

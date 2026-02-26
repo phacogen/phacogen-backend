@@ -35,6 +35,9 @@ export class SampleCollection extends Document {
   @Prop()
   thoiGianHoanThanhKiemTra?: Date;
 
+  @Prop()
+  emailSentAt?: Date; // Thời gian gửi email thông báo hoàn thành
+
   @Prop({ type: Types.ObjectId, ref: 'Clinic' })
   phongKhamKiemTra?: Types.ObjectId;
 

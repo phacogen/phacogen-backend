@@ -11,6 +11,12 @@ export class UserService {
   constructor(@InjectModel(User.name) private userModel: Model<User>) { }
 
   async create(data: any): Promise<User> {
+    // Auto-generate maNhanVien if not provided
+    if (!data.maNhanVien) {
+      const count = await this.userModel.countDocuments().exec();
+      data.maNhanVien = `NV${String(count + 1).padStart(4, '0')}`;
+    }
+    
     const user = new this.userModel(data);
     return user.save();
   }

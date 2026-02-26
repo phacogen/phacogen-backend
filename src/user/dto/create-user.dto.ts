@@ -9,8 +9,8 @@ class CoordinatesDto {
 }
 
 export class CreateUserDto {
-  @ApiProperty({ example: 'NV001', description: 'Mã nhân viên (unique)' })
-  maNhanVien: string;
+  @ApiPropertyOptional({ example: 'NV001', description: 'Mã nhân viên (tự động sinh nếu không nhập)' })
+  maNhanVien?: string;
 
   @ApiProperty({ example: 'user001', description: 'Tên đăng nhập (unique)' })
   username: string;
