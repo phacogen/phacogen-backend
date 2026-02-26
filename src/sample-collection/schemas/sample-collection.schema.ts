@@ -56,6 +56,9 @@ export class SampleCollection extends Document {
   @Prop()
   thoiGianHenHoanThanh?: Date;
 
+  @Prop({ type: Number, default: 0 })
+  khoangCachDiChuyen?: number; // Khoảng cách từ nhân viên đến phòng khám (km)
+
   // Bus station order fields (optional - chỉ dùng cho lệnh nhà xe)
   @Prop()
   tenNhaXe?: string;

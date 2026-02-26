@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { EmailService } from '../email/email.service';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType } from '../notification/schemas/notification.schema';
@@ -73,6 +73,32 @@ export class SampleCollectionService {
     });
 
     const saved = await sampleCollection.save();
+
+    // Nếu có giao nhân viên ngay khi tạo (auto-create), tính khoảng cách
+    if (data.nhanVienThucHien && phongKhamItems.length > 0) {
+      try {
+        const employee = await this.userModel.findById(data.nhanVienThucHien).exec();
+        const clinicId = phongKhamItems[0].phongKham;
+        // Convert to ObjectId if string
+        const clinicObjectId = typeof clinicId === 'string' ? new Types.ObjectId(clinicId) : clinicId;
+        const clinic = await this.sampleCollectionModel.db.collection('clinics').findOne({ _id: clinicObjectId });
+        
+        if (employee?.viTriHienTai && clinic?.toaDo?.lat && clinic?.toaDo?.lng) {
+          const khoangCach = this.calculateDistance(
+            employee.viTriHienTai.lat,
+            employee.viTriHienTai.lng,
+            clinic.toaDo.lat,
+            clinic.toaDo.lng
+          );
+          console.log(`Auto-create: Calculated distance for ${saved.maLenh}: ${khoangCach} km`);
+          await this.sampleCollectionModel.findByIdAndUpdate(saved._id, { khoangCachDiChuyen: khoangCach }).exec();
+        } else {
+          console.log(`Auto-create: Cannot calculate distance - employee location: ${!!employee?.viTriHienTai}, clinic coords: ${!!clinic?.toaDo}`);
+        }
+      } catch (error) {
+        console.error('Error calculating distance in auto-create:', error);
+      }
+    }
 
     // Lưu lịch sử: Tạo lệnh (không có trạng thái trước đó)
     await this.saveHistory(
@@ -415,6 +441,22 @@ export class SampleCollectionService {
       // Lấy thông tin nhân viên được giao
       const assignedEmployee = await this.userModel.findById(data.nhanVienThucHien).exec();
       const employeeName = assignedEmployee?.hoTen || 'nhân viên';
+
+      // Tính khoảng cách từ nhân viên đến phòng khám
+      let khoangCach = 0;
+      if (assignedEmployee?.viTriHienTai && result.phongKhamItems && result.phongKhamItems.length > 0) {
+        const firstClinic = result.phongKhamItems[0].phongKham as any;
+        if (firstClinic?.toaDo?.lat && firstClinic?.toaDo?.lng) {
+          khoangCach = this.calculateDistance(
+            assignedEmployee.viTriHienTai.lat,
+            assignedEmployee.viTriHienTai.lng,
+            firstClinic.toaDo.lat,
+            firstClinic.toaDo.lng
+          );
+          // Lưu khoảng cách vào lệnh
+          await this.sampleCollectionModel.findByIdAndUpdate(id, { khoangCachDiChuyen: khoangCach }).exec();
+        }
+      }
 
       // Lấy thông tin phòng khám hoặc nhà xe
       let locationInfo = '';
@@ -984,20 +1026,12 @@ export class SampleCollectionService {
           tongTienCuocNhanMau += item.soTienCuocNhanMau || 0;
           tongTienShip += item.soTienShip || 0;
           tongTienGuiXe += item.soTienGuiXe || 0;
-
-          // Tính khoảng cách nếu phòng khám có tọa độ
-          const clinic = item.phongKham as any;
-          if (clinic && clinic.toaDo && clinic.toaDo.lat && clinic.toaDo.lng) {
-            const distance = this.calculateDistance(
-              officeLocation.lat,
-              officeLocation.lng,
-              clinic.toaDo.lat,
-              clinic.toaDo.lng
-            );
-            // Nhân 2 để tính khứ hồi
-            tongKmDiDuoc += distance * 2;
-          }
         });
+      }
+      
+      // Cộng khoảng cách đã lưu (từ nhân viên đến phòng khám)
+      if (c.khoangCachDiChuyen) {
+        tongKmDiDuoc += c.khoangCachDiChuyen;
       }
     });
 
@@ -1009,22 +1043,8 @@ export class SampleCollectionService {
         const id = employee._id.toString();
         const name = employee.hoTen;
 
-        // Tính km cho lệnh này
-        let kmForOrder = 0;
-        if (c.phongKhamItems && c.phongKhamItems.length > 0) {
-          c.phongKhamItems.forEach(item => {
-            const clinic = item.phongKham as any;
-            if (clinic && clinic.toaDo && clinic.toaDo.lat && clinic.toaDo.lng) {
-              const distance = this.calculateDistance(
-                officeLocation.lat,
-                officeLocation.lng,
-                clinic.toaDo.lat,
-                clinic.toaDo.lng
-              );
-              kmForOrder += distance * 2; // Khứ hồi
-            }
-          });
-        }
+        // Cộng km cho lệnh này (sử dụng khoảng cách đã lưu)
+        let kmForOrder = c.khoangCachDiChuyen || 0;
 
         if (employeeMap.has(id)) {
           const existing = employeeMap.get(id)!;
