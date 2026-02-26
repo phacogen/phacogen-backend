@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Notification, NotificationDocument } from './schemas/notification.schema';
-import { CreateNotificationDto } from './dto/create-notification.dto';
 import { PushNotificationService } from '../push-notification/push-notification.service';
+import { CreateNotificationDto } from './dto/create-notification.dto';
+import { Notification, NotificationDocument } from './schemas/notification.schema';
 
 @Injectable()
 export class NotificationService {
@@ -11,7 +11,7 @@ export class NotificationService {
     @InjectModel(Notification.name)
     private notificationModel: Model<NotificationDocument>,
     private pushNotificationService: PushNotificationService,
-  ) {}
+  ) { }
 
   async create(createNotificationDto: CreateNotificationDto): Promise<Notification> {
     const notification = new this.notificationModel(createNotificationDto);
@@ -25,7 +25,7 @@ export class NotificationService {
         createNotificationDto.message,
         {
           type: createNotificationDto.type,
-          relatedOrderId: createNotificationDto.relatedOrderId?.toString(),
+          orderId: createNotificationDto.relatedOrderId?.toString(),
           notificationId: savedNotification._id.toString(),
         },
       );
@@ -43,7 +43,7 @@ export class NotificationService {
       .sort({ createdAt: -1 })
       .lean()
       .exec();
-    
+
     // Convert relatedOrderId từ ObjectId sang string
     return notifications.map(notification => ({
       ...notification,
