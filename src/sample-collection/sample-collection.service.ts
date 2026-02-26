@@ -85,7 +85,7 @@ export class SampleCollectionService {
 
     // Tạo thông báo CHỈ cho Admin khi tạo lệnh mới
     const admins = await this.getAdminUsers();
-    
+
     // Lấy thông tin phòng khám hoặc nhà xe
     let locationInfo = '';
     if (saved.tenNhaXe) {
@@ -96,13 +96,13 @@ export class SampleCollectionService {
         .findById(saved._id)
         .populate('phongKhamItems.phongKham')
         .exec();
-      
+
       if (populatedOrder && populatedOrder.phongKhamItems && populatedOrder.phongKhamItems.length > 0) {
         const firstClinic = populatedOrder.phongKhamItems[0].phongKham as any;
         locationInfo = `phòng khám ${firstClinic?.tenPhongKham || 'N/A'}`;
       }
     }
-    
+
     for (const admin of admins) {
       await this.notificationService.create({
         userId: admin._id.toString(),
@@ -146,6 +146,8 @@ export class SampleCollectionService {
     page?: number;
     limit?: number;
     currentUser?: any;
+    startDate?: string;
+    endDate?: string;
   }): Promise<{
     data: SampleCollection[];
     total: number;
@@ -153,17 +155,76 @@ export class SampleCollectionService {
     limit: number;
     totalPages: number;
   }> {
-    const { status, search, employeeId, clinicId, page = 1, limit = 10, currentUser } = params;
+    const { status, search, employeeId, clinicId, page = 1, limit = 10, currentUser, startDate, endDate } = params;
 
-    console.log('=== findAllWithPagination params ===', { status, search, employeeId, clinicId, page, limit });
+    console.log('=== findAllWithPagination params ===', { status, search, employeeId, clinicId, page, limit, startDate, endDate });
 
     // Build query filter
+    const filter = await this.buildQueryFilter({ status, search, employeeId, clinicId, currentUser, startDate, endDate });
+
+    // Calculate skip
+    const skip = (page - 1) * limit;
+
+    console.log('Final filter:', JSON.stringify(filter, null, 2));
+
+    // Get total count
+    const total = await this.sampleCollectionModel.countDocuments(filter).exec();
+
+    console.log('Total documents found:', total);
+
+    // Get paginated data
+    const data = await this.sampleCollectionModel
+      .find(filter)
+      .populate('phongKhamItems.phongKham')
+      .populate('noiDungCongViec')
+      .populate('nguoiGiaoLenh')
+      .populate('nhanVienThucHien')
+      .populate('phongKhamKiemTra')
+      .sort({ createdAt: -1 }) // Newest first
+      .skip(skip)
+      .limit(limit)
+      .exec();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  // Helper method để build query filter (dùng chung cho list và count)
+  private async buildQueryFilter(params: {
+    status?: string;
+    search?: string;
+    employeeId?: string;
+    clinicId?: string;
+    currentUser?: any;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any> {
+    const { status, search, employeeId, clinicId, currentUser, startDate, endDate } = params;
+
     const filter: any = {};
     const andConditions: any[] = [];
 
     // Filter by status
     if (status) {
       filter.trangThai = status;
+    }
+
+    // Filter by date range
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) {
+        filter.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
     }
 
     // Filter by clinic (search in phongKhamItems array OR old phongKham field)
@@ -179,14 +240,13 @@ export class SampleCollectionService {
     // Filter by employee - LOGIC MỚI DỰA TRÊN PERMISSION
     // Kiểm tra quyền xem lệnh
     const hasViewAllPermission = currentUser?.permissions?.includes('ORDER_VIEW_ALL');
-    const hasViewOwnPermission = currentUser?.permissions?.includes('ORDER_VIEW_OWN');
-    
+
     if (employeeId && !hasViewAllPermission) {
       // Nếu có quyền ORDER_VIEW_OWN hoặc không có quyền ORDER_VIEW_ALL
       // Áp dụng logic filter theo status
-      const isCompletedStatus = status === SampleCollectionStatus.HOAN_THANH || 
-                                status === SampleCollectionStatus.HOAN_THANH_KIEM_TRA;
-      
+      const isCompletedStatus = status === SampleCollectionStatus.HOAN_THANH ||
+        status === SampleCollectionStatus.HOAN_THANH_KIEM_TRA;
+
       if (!isCompletedStatus) {
         // Với status khác HOAN_THANH và HOAN_THANH_KIEM_TRA: chỉ xem lệnh được giao cho mình
         andConditions.push({
@@ -227,36 +287,48 @@ export class SampleCollectionService {
       filter.$and = andConditions;
     }
 
-    // Calculate skip
-    const skip = (page - 1) * limit;
+    return filter;
+  }
 
-    console.log('Final filter:', JSON.stringify(filter, null, 2));
-    console.log('User permissions:', currentUser?.permissions, 'hasViewAll:', hasViewAllPermission, 'hasViewOwn:', hasViewOwnPermission);
 
-    // Get total count
-    const total = await this.sampleCollectionModel.countDocuments(filter).exec();
+  // API count theo từng status (gọi 1 lần trả về tất cả)
+  async countByStatus(params: {
+    search?: string;
+    employeeId?: string;
+    clinicId?: string;
+    currentUser?: any;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
+    all: number;
+    CHO_DIEU_PHOI: number;
+    DANG_THUC_HIEN: number;
+    HOAN_THANH: number;
+    HOAN_THANH_KIEM_TRA: number;
+    DA_HUY: number;
+  }> {
+    // Get base filter without status
+    const baseFilter = await this.buildQueryFilter(params);
 
-    console.log('Total documents found:', total);
+    // Count all
+    const all = await this.sampleCollectionModel.countDocuments(baseFilter).exec();
 
-    // Get paginated data
-    const data = await this.sampleCollectionModel
-      .find(filter)
-      .populate('phongKhamItems.phongKham')
-      .populate('noiDungCongViec')
-      .populate('nguoiGiaoLenh')
-      .populate('nhanVienThucHien')
-      .populate('phongKhamKiemTra')
-      .sort({ createdAt: -1 }) // Newest first
-      .skip(skip)
-      .limit(limit)
-      .exec();
+    // Count by each status
+    const [CHO_DIEU_PHOI, DANG_THUC_HIEN, HOAN_THANH, HOAN_THANH_KIEM_TRA, DA_HUY] = await Promise.all([
+      this.sampleCollectionModel.countDocuments({ ...baseFilter, trangThai: SampleCollectionStatus.CHO_DIEU_PHOI }).exec(),
+      this.sampleCollectionModel.countDocuments({ ...baseFilter, trangThai: SampleCollectionStatus.DANG_THUC_HIEN }).exec(),
+      this.sampleCollectionModel.countDocuments({ ...baseFilter, trangThai: SampleCollectionStatus.HOAN_THANH }).exec(),
+      this.sampleCollectionModel.countDocuments({ ...baseFilter, trangThai: SampleCollectionStatus.HOAN_THANH_KIEM_TRA }).exec(),
+      this.sampleCollectionModel.countDocuments({ ...baseFilter, trangThai: SampleCollectionStatus.DA_HUY }).exec(),
+    ]);
 
     return {
-      data,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      all,
+      CHO_DIEU_PHOI,
+      DANG_THUC_HIEN,
+      HOAN_THANH,
+      HOAN_THANH_KIEM_TRA,
+      DA_HUY,
     };
   }
 
@@ -343,7 +415,7 @@ export class SampleCollectionService {
       // Lấy thông tin nhân viên được giao
       const assignedEmployee = await this.userModel.findById(data.nhanVienThucHien).exec();
       const employeeName = assignedEmployee?.hoTen || 'nhân viên';
-      
+
       // Lấy thông tin phòng khám hoặc nhà xe
       let locationInfo = '';
       if (result.tenNhaXe) {
@@ -352,7 +424,7 @@ export class SampleCollectionService {
         const firstClinic = result.phongKhamItems[0].phongKham as any;
         locationInfo = ` tại phòng khám ${firstClinic?.tenPhongKham || 'N/A'}`;
       }
-      
+
       // Gửi thông báo cho: người được giao, người tạo lệnh, và Admin
       const recipientIds = new Set<string>();
 
@@ -382,7 +454,7 @@ export class SampleCollectionService {
           // Người tạo lệnh và Admin
           message = `Lệnh ${result.maLenh} đã được giao cho ${employeeName}${locationInfo}${result.uuTien ? ' (GẤP)' : ''}`;
         }
-        
+
         await this.notificationService.create({
           userId,
           title: 'Điều phối lệnh thu mẫu',
@@ -429,18 +501,18 @@ export class SampleCollectionService {
       const firstClinic = order.phongKhamItems[0].phongKham as any;
       locationInfo = ` tại phòng khám ${firstClinic?.tenPhongKham || 'N/A'}`;
     }
-    
+
     // Lấy tên nhân viên thực hiện
-    const employeeName = order.nhanVienThucHien 
-      ? (typeof order.nhanVienThucHien === 'object' 
-          ? (order.nhanVienThucHien as any).hoTen 
-          : 'nhân viên')
+    const employeeName = order.nhanVienThucHien
+      ? (typeof order.nhanVienThucHien === 'object'
+        ? (order.nhanVienThucHien as any).hoTen
+        : 'nhân viên')
       : 'nhân viên';
 
     // Gửi thông báo cho tất cả người nhận
     for (const userId of recipientIds) {
       let message = '';
-      
+
       // Tùy chỉnh message dựa trên trạng thái
       switch (order.trangThai) {
         case SampleCollectionStatus.DANG_THUC_HIEN:
@@ -458,7 +530,7 @@ export class SampleCollectionService {
         default:
           message = `Lệnh ${order.maLenh}${locationInfo}: ${ghiChu}`;
       }
-      
+
       await this.notificationService.create({
         userId,
         title: 'Cập nhật trạng thái lệnh',
@@ -929,17 +1001,37 @@ export class SampleCollectionService {
       }
     });
 
-    // Calculate employee stats
-    const employeeMap = new Map<string, { name: string; count: number }>();
+    // Calculate employee stats (số lệnh và km đi được)
+    const employeeMap = new Map<string, { name: string; count: number; km: number }>();
     collections.forEach((c) => {
       if (c.nhanVienThucHien) {
         const employee = c.nhanVienThucHien as any;
         const id = employee._id.toString();
         const name = employee.hoTen;
+
+        // Tính km cho lệnh này
+        let kmForOrder = 0;
+        if (c.phongKhamItems && c.phongKhamItems.length > 0) {
+          c.phongKhamItems.forEach(item => {
+            const clinic = item.phongKham as any;
+            if (clinic && clinic.toaDo && clinic.toaDo.lat && clinic.toaDo.lng) {
+              const distance = this.calculateDistance(
+                officeLocation.lat,
+                officeLocation.lng,
+                clinic.toaDo.lat,
+                clinic.toaDo.lng
+              );
+              kmForOrder += distance * 2; // Khứ hồi
+            }
+          });
+        }
+
         if (employeeMap.has(id)) {
-          employeeMap.get(id)!.count++;
+          const existing = employeeMap.get(id)!;
+          existing.count++;
+          existing.km += kmForOrder;
         } else {
-          employeeMap.set(id, { name, count: 1 });
+          employeeMap.set(id, { name, count: 1, km: kmForOrder });
         }
       }
     });
@@ -947,6 +1039,7 @@ export class SampleCollectionService {
     const employeeStats = Array.from(employeeMap.values()).map((v) => ({
       tenNhanVien: v.name,
       soLenh: v.count,
+      kmDiDuoc: v.km,
     }));
 
     // Calculate status distribution

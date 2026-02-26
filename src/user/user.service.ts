@@ -83,13 +83,24 @@ export class UserService {
   }
 
   async update(id: string, data: any): Promise<User> {
-    // If password is being updated, hash it first
+    // If password is being updated, use save() to trigger pre-save middleware
     if (data.password) {
-      const bcrypt = require('bcrypt');
-      const salt = await bcrypt.genSalt(10);
-      data.password = await bcrypt.hash(data.password, salt);
+      const user = await this.userModel.findById(id).exec();
+      if (!user) {
+        throw new BadRequestException('Người dùng không tồn tại');
+      }
+      
+      // Update all fields
+      Object.assign(user, data);
+      
+      // Save will trigger pre-save middleware to hash password
+      await user.save();
+      
+      // Populate and return
+      return this.userModel.findById(id).populate('vaiTro').exec();
     }
 
+    // If no password update, use findByIdAndUpdate as before
     return this.userModel.findByIdAndUpdate(id, data, { new: true }).populate('vaiTro').exec();
   }
 
@@ -165,12 +176,8 @@ export class UserService {
       throw new UnauthorizedException('Mật khẩu hiện tại không đúng');
     }
 
-    // Hash mật khẩu mới
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(dto.newPassword, salt);
-
-    // Cập nhật mật khẩu
-    user.password = hashedPassword;
+    // Cập nhật mật khẩu mới (middleware sẽ tự động hash)
+    user.password = dto.newPassword;
     await user.save();
 
     return { message: 'Đổi mật khẩu thành công' };

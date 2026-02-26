@@ -1,18 +1,18 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, Res, UploadedFiles, UseInterceptors, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Req, Res, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { Permissions } from '../auth/decorators/permissions.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { Permission } from '../role/schemas/role.schema';
 import { AssignStaffDto } from './dto/assign-staff.dto';
 import { CreateSampleCollectionDto } from './dto/create-sample-collection.dto';
 import { UpdateSampleCollectionDto } from './dto/update-sample-collection.dto';
 import { UpdateSampleCollectionStatusDto } from './dto/update-status.dto';
 import { SampleCollectionService } from './sample-collection.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { PermissionsGuard } from '../auth/guards/permissions.guard';
-import { Permissions } from '../auth/decorators/permissions.decorator';
-import { Permission } from '../role/schemas/role.schema';
 
 @ApiTags('sample-collections')
 @ApiBearerAuth('JWT-auth')
@@ -30,6 +30,36 @@ export class SampleCollectionController {
     return this.sampleCollectionService.create(data);
   }
 
+  @Get('count-by-status')
+  @ApiOperation({ summary: 'Đếm số lượng lệnh nhận mẫu theo từng trạng thái' })
+  @ApiQuery({ name: 'search', description: 'Tìm kiếm theo mã lệnh hoặc nội dung công việc', required: false })
+  @ApiQuery({ name: 'employeeId', description: 'Lọc theo nhân viên thực hiện', required: false })
+  @ApiQuery({ name: 'clinicId', description: 'Lọc theo phòng khám', required: false })
+  @ApiQuery({ name: 'startDate', description: 'Từ ngày (ISO format)', required: false })
+  @ApiQuery({ name: 'endDate', description: 'Đến ngày (ISO format)', required: false })
+  @ApiResponse({ status: 200, description: 'Số lượng lệnh theo từng trạng thái' })
+  countByStatus(
+    @Query('search') search?: string,
+    @Query('employeeId') employeeId?: string,
+    @Query('clinicId') clinicId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Req() req?: any,
+  ) {
+    const user = req?.user;
+
+    return this.sampleCollectionService.countByStatus({
+      search,
+      employeeId,
+      clinicId,
+      startDate,
+      endDate,
+      currentUser: user,
+    });
+  }
+
+
+
   @Get()
   // @Permissions(Permission.ORDER_VIEW) // Temporarily disabled for testing
   @ApiOperation({ summary: 'Lấy danh sách lệnh nhận mẫu với phân trang và tìm kiếm' })
@@ -37,6 +67,8 @@ export class SampleCollectionController {
   @ApiQuery({ name: 'search', description: 'Tìm kiếm theo mã lệnh hoặc nội dung công việc', required: false })
   @ApiQuery({ name: 'employeeId', description: 'Lọc theo nhân viên thực hiện', required: false })
   @ApiQuery({ name: 'clinicId', description: 'Lọc theo phòng khám', required: false })
+  @ApiQuery({ name: 'startDate', description: 'Từ ngày (ISO format)', required: false })
+  @ApiQuery({ name: 'endDate', description: 'Đến ngày (ISO format)', required: false })
   @ApiQuery({ name: 'page', description: 'Số trang (bắt đầu từ 1)', required: false, type: Number })
   @ApiQuery({ name: 'limit', description: 'Số lượng mỗi trang', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Danh sách lệnh nhận mẫu' })
@@ -45,21 +77,25 @@ export class SampleCollectionController {
     @Query('search') search?: string,
     @Query('employeeId') employeeId?: string,
     @Query('clinicId') clinicId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Req() req?: any,
   ) {
     const pageNum = page ? parseInt(page, 10) : undefined;
     const limitNum = limit ? parseInt(limit, 10) : undefined;
-    
+
     // Lấy user từ request (được set bởi JwtAuthGuard)
     const user = req?.user;
-    
+
     return this.sampleCollectionService.findAllWithPagination({
       status,
       search,
       employeeId,
       clinicId,
+      startDate,
+      endDate,
       page: pageNum,
       limit: limitNum,
       currentUser: user,
@@ -71,13 +107,13 @@ export class SampleCollectionController {
   @ApiResponse({ status: 200, description: 'File Excel' })
   async exportExcel(@Res() res: Response) {
     const buffer = await this.sampleCollectionService.exportToExcel();
-    
+
     const filename = `lenh-thu-mau-${Date.now()}.xlsx`;
-    
+
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Length', buffer.length);
-    
+
     res.send(buffer);
   }
 
@@ -254,7 +290,7 @@ export class SampleCollectionController {
     @Query('saveToDb') saveToDb?: string,
   ) {
     const imagePaths = files.map(file => `/uploads/sample-collections/${file.filename}`);
-    
+
     // Nếu saveToDb = 'true', lưu vào database (cho bước hoàn thành standard)
     // Nếu không, chỉ trả về đường dẫn (cho bước verification bus station)
     if (saveToDb === 'true') {
@@ -262,7 +298,7 @@ export class SampleCollectionController {
         anhHoanThanh: imagePaths,
       });
     }
-    
+
     // Mặc định: chỉ trả về đường dẫn
     return {
       anhHoanThanh: imagePaths,
