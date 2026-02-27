@@ -1032,6 +1032,16 @@ export class SampleCollectionService {
     let tongTienGuiXe = 0;
     let tongKmDiDuoc = 0;
 
+    // Tính số lệnh quá hạn
+    const now = new Date();
+    const overdueCollections = collections.filter(c => {
+      return c.thoiGianHenHoanThanh && 
+             new Date(c.thoiGianHenHoanThanh) < now &&
+             c.trangThai !== SampleCollectionStatus.HOAN_THANH_KIEM_TRA &&
+             c.trangThai !== SampleCollectionStatus.DA_HUY;
+    });
+    const tongSoLenhQuaHan = overdueCollections.length;
+
     // Tính tổng km dựa trên khoảng cách đến phòng khám
     // Giả định: mỗi lệnh = khoảng cách khứ hồi từ văn phòng đến phòng khám
     const officeLocation = { lat: 10.762622, lng: 106.660172 }; // Tọa độ văn phòng mặc định (TP.HCM)
@@ -1051,8 +1061,8 @@ export class SampleCollectionService {
       }
     });
 
-    // Calculate employee stats (số lệnh và km đi được)
-    const employeeMap = new Map<string, { name: string; count: number; km: number }>();
+    // Calculate employee stats (số lệnh, km đi được, và số lệnh quá hạn)
+    const employeeMap = new Map<string, { name: string; count: number; km: number; overdue: number }>();
     collections.forEach((c) => {
       if (c.nhanVienThucHien) {
         const employee = c.nhanVienThucHien as any;
@@ -1062,12 +1072,19 @@ export class SampleCollectionService {
         // Cộng km cho lệnh này (sử dụng khoảng cách đã lưu)
         let kmForOrder = c.khoangCachDiChuyen || 0;
 
+        // Kiểm tra lệnh có quá hạn không
+        const isOverdue = c.thoiGianHenHoanThanh && 
+                         new Date(c.thoiGianHenHoanThanh) < now &&
+                         c.trangThai !== SampleCollectionStatus.HOAN_THANH_KIEM_TRA &&
+                         c.trangThai !== SampleCollectionStatus.DA_HUY;
+
         if (employeeMap.has(id)) {
           const existing = employeeMap.get(id)!;
           existing.count++;
           existing.km += kmForOrder;
+          if (isOverdue) existing.overdue++;
         } else {
-          employeeMap.set(id, { name, count: 1, km: kmForOrder });
+          employeeMap.set(id, { name, count: 1, km: kmForOrder, overdue: isOverdue ? 1 : 0 });
         }
       }
     });
@@ -1076,6 +1093,7 @@ export class SampleCollectionService {
       tenNhanVien: v.name,
       soLenh: v.count,
       kmDiDuoc: v.km,
+      soLenhQuaHan: v.overdue,
     }));
 
     // Calculate status distribution
@@ -1107,6 +1125,7 @@ export class SampleCollectionService {
         tongTienGuiXe,
         tongTatCa: tongTienCuocNhanMau + tongTienShip + tongTienGuiXe,
         tongKmDiDuoc,
+        tongSoLenhQuaHan,
       },
       employeeStats,
       statusDistribution,
