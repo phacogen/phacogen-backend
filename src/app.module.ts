@@ -15,6 +15,7 @@ import { WorkContentModule } from './work-content/work-content.module';
 import { WorkScheduleModule } from './work-schedule/work-schedule.module';
 import { PushNotificationModule } from './push-notification/push-notification.module';
 import { BusStationModule } from './bus-station/bus-station.module';
+import { GeocodingModule } from './geocoding/geocoding.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { BusStationModule } from './bus-station/bus-station.module';
     SupplyModule,
     PushNotificationModule,
     BusStationModule,
+    GeocodingModule,
   ],
 })
 export class AppModule { }
