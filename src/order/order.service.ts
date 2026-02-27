@@ -2,10 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Order, OrderStatus } from './schemas/order.schema';
+import { OrderMessage } from './schemas/order-message.schema';
 
 @Injectable()
 export class OrderService {
-  constructor(@InjectModel(Order.name) private orderModel: Model<Order>) {}
+  constructor(
+    @InjectModel(Order.name) private orderModel: Model<Order>,
+    @InjectModel(OrderMessage.name) private orderMessageModel: Model<OrderMessage>,
+  ) {}
 
   async create(data: any): Promise<Order> {
     const order = new this.orderModel(data);
@@ -118,5 +122,22 @@ export class OrderService {
     };
 
     return stats;
+  }
+
+  async getMessages(orderId: string): Promise<OrderMessage[]> {
+    return this.orderMessageModel
+      .find({ orderId })
+      .populate('userId', 'hoTen email')
+      .sort({ createdAt: 1 })
+      .exec();
+  }
+
+  async sendMessage(orderId: string, userId: string, message: string): Promise<OrderMessage> {
+    const newMessage = new this.orderMessageModel({
+      orderId,
+      userId,
+      message,
+    });
+    return newMessage.save();
   }
 }

@@ -108,4 +108,20 @@ export class OrderController {
   delete(@Param('id') id: string) {
     return this.orderService.delete(id);
   }
+
+  @Get(':id/messages')
+  @ApiOperation({ summary: 'Lấy danh sách tin nhắn của lệnh' })
+  @ApiParam({ name: 'id', description: 'ID phiếu cấp' })
+  @ApiResponse({ status: 200, description: 'Danh sách tin nhắn' })
+  getMessages(@Param('id') id: string) {
+    return this.orderService.getMessages(id);
+  }
+
+  @Post(':id/messages')
+  @ApiOperation({ summary: 'Gửi tin nhắn trong lệnh' })
+  @ApiParam({ name: 'id', description: 'ID phiếu cấp' })
+  @ApiResponse({ status: 201, description: 'Tin nhắn đã được gửi' })
+  sendMessage(@Param('id') id: string, @Body() data: { userId: string; message: string }) {
+    return this.orderService.sendMessage(id, data.userId, data.message);
+  }
 }

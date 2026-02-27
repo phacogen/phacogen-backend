@@ -105,8 +105,31 @@ export class SampleCollectionController {
   @Get('export/excel')
   @ApiOperation({ summary: 'Xuất danh sách lệnh nhận mẫu ra Excel' })
   @ApiResponse({ status: 200, description: 'File Excel' })
-  async exportExcel(@Res() res: Response) {
-    const buffer = await this.sampleCollectionService.exportToExcel();
+  @ApiQuery({ name: 'status', required: false, description: 'Lọc theo trạng thái' })
+  @ApiQuery({ name: 'search', required: false, description: 'Tìm kiếm theo mã lệnh hoặc nội dung' })
+  @ApiQuery({ name: 'employeeId', required: false, description: 'Lọc theo nhân viên' })
+  @ApiQuery({ name: 'clinicId', required: false, description: 'Lọc theo phòng khám' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Ngày bắt đầu (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Ngày kết thúc (YYYY-MM-DD)' })
+  async exportExcel(
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('employeeId') employeeId?: string,
+    @Query('clinicId') clinicId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Req() req?: any,
+    @Res() res?: Response,
+  ) {
+    const buffer = await this.sampleCollectionService.exportToExcel({
+      status,
+      search,
+      employeeId,
+      clinicId,
+      startDate,
+      endDate,
+      currentUser: req.user,
+    });
 
     const filename = `lenh-thu-mau-${Date.now()}.xlsx`;
 
@@ -355,4 +378,22 @@ export class SampleCollectionController {
       body.nguoiThucHien
     );
   }
+
+  @Get(':id/messages')
+  @ApiOperation({ summary: 'Lấy danh sách tin nhắn của lệnh' })
+  @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
+  @ApiResponse({ status: 200, description: 'Danh sách tin nhắn' })
+  getMessages(@Param('id') id: string) {
+    return this.sampleCollectionService.getMessages(id);
+  }
+
+  @Post(':id/messages')
+  @ApiOperation({ summary: 'Gửi tin nhắn trong lệnh' })
+  @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
+  @ApiResponse({ status: 201, description: 'Tin nhắn đã được gửi' })
+  sendMessage(@Param('id') id: string, @Body() data: { userId: string; message: string }) {
+    return this.sampleCollectionService.sendMessage(id, data.userId, data.message);
+  }
+
+
 }

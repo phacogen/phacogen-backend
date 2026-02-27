@@ -250,37 +250,6 @@ export class EmailService {
                 </p>
               </div>
               
-              <!-- Chi phí -->
-              <div style="background-color: #e8f5e9; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                <h3 style="margin: 0 0 15px 0; color: #4caf50; font-size: 16px;">💰 Chi phí</h3>
-                <table style="width: 100%; border-collapse: collapse;">
-                  <tr>
-                    <td style="padding: 8px 0; font-size: 14px; color: #333;">Cước nhận mẫu:</td>
-                    <td style="padding: 8px 0; font-size: 14px; color: #333; text-align: right; font-weight: bold;">
-                      ${soTienCuocNhanMau.toLocaleString('vi-VN')} VNĐ
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 8px 0; font-size: 14px; color: #333;">Phí ship:</td>
-                    <td style="padding: 8px 0; font-size: 14px; color: #333; text-align: right; font-weight: bold;">
-                      ${soTienShip.toLocaleString('vi-VN')} VNĐ
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 8px 0; font-size: 14px; color: #333;">Phí gửi xe:</td>
-                    <td style="padding: 8px 0; font-size: 14px; color: #333; text-align: right; font-weight: bold;">
-                      ${soTienGuiXe.toLocaleString('vi-VN')} VNĐ
-                    </td>
-                  </tr>
-                  <tr style="border-top: 2px solid #4caf50;">
-                    <td style="padding: 12px 0 0 0; font-size: 15px; color: #333; font-weight: bold;">Tổng cộng:</td>
-                    <td style="padding: 12px 0 0 0; font-size: 15px; color: #4caf50; text-align: right; font-weight: bold;">
-                      ${(soTienCuocNhanMau + soTienShip + soTienGuiXe).toLocaleString('vi-VN')} VNĐ
-                    </td>
-                  </tr>
-                </table>
-              </div>
-              
               <!-- Hình ảnh hoàn thành -->
               ${imageUrls.length > 0 ? `
               <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 20px;">

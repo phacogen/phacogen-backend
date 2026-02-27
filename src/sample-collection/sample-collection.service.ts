@@ -8,6 +8,7 @@ import { NotificationType } from '../notification/schemas/notification.schema';
 import { User } from '../user/schemas/user.schema';
 import { SampleCollectionHistory } from './schemas/sample-collection-history.schema';
 import { SampleCollection, SampleCollectionStatus } from './schemas/sample-collection.schema';
+import { SampleCollectionMessage } from './schemas/sample-collection-message.schema';
 
 @Injectable()
 export class SampleCollectionService {
@@ -16,6 +17,8 @@ export class SampleCollectionService {
     private sampleCollectionModel: Model<SampleCollection>,
     @InjectModel(SampleCollectionHistory.name)
     private sampleCollectionHistoryModel: Model<SampleCollectionHistory>,
+    @InjectModel(SampleCollectionMessage.name)
+    private sampleCollectionMessageModel: Model<SampleCollectionMessage>,
     @InjectModel(User.name)
     private userModel: Model<User>,
     private emailService: EmailService,
@@ -738,14 +741,25 @@ export class SampleCollectionService {
       .exec();
   }
 
-  async exportToExcel(): Promise<any> {
+  async exportToExcel(filters?: {
+    status?: string;
+    search?: string;
+    employeeId?: string;
+    clinicId?: string;
+    startDate?: string;
+    endDate?: string;
+    currentUser?: any;
+  }): Promise<any> {
     const ExcelJS = require('exceljs');
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Lệnh Thu Mẫu');
 
-    // Fetch data
+    // Build filter query
+    const filter = filters ? await this.buildQueryFilter(filters) : {};
+
+    // Fetch data with filters
     const collections = await this.sampleCollectionModel
-      .find()
+      .find(filter)
       .populate('phongKhamItems.phongKham')
       .populate('noiDungCongViec')
       .populate('nguoiGiaoLenh')
@@ -762,6 +776,7 @@ export class SampleCollectionService {
       { header: 'Ưu tiên', key: 'uuTien', width: 10 },
       { header: 'Người giao lệnh', key: 'nguoiGiaoLenh', width: 20 },
       { header: 'Nhân viên thực hiện', key: 'nhanVienThucHien', width: 20 },
+      { header: 'Khoảng cách (km)', key: 'khoangCach', width: 15 },
       { header: 'Thời gian tạo', key: 'createdAt', width: 20 },
       { header: 'Hạn hoàn thành', key: 'thoiGianHenHoanThanh', width: 20 },
       { header: 'Ghi chú', key: 'ghiChu', width: 30 },
@@ -817,6 +832,7 @@ export class SampleCollectionService {
         uuTien: collection.uuTien ? 'Gấp' : 'Bình thường',
         nguoiGiaoLenh: collection.nguoiGiaoLenh?.hoTen || 'N/A',
         nhanVienThucHien: collection.nhanVienThucHien?.hoTen || 'Chưa phân công',
+        khoangCach: collection.khoangCachDiChuyen ? collection.khoangCachDiChuyen.toFixed(2) : '-',
         createdAt: collection.createdAt ? new Date(collection.createdAt).toLocaleString('vi-VN') : '',
         thoiGianHenHoanThanh: collection.thoiGianHenHoanThanh
           ? new Date(collection.thoiGianHenHoanThanh).toLocaleString('vi-VN')
@@ -837,8 +853,8 @@ export class SampleCollectionService {
         tongTien: tongTien,
       });
 
-      // Format money columns
-      [11, 12, 13, 14].forEach((colNum) => {
+      // Format money columns (cột 12, 13, 14, 15 vì đã thêm cột khoảng cách)
+      [12, 13, 14, 15].forEach((colNum) => {
         const cell = row.getCell(colNum);
         cell.numFmt = '#,##0';
       });
@@ -1435,5 +1451,22 @@ export class SampleCollectionService {
         // Continue with other clinics even if one fails
       }
     }
+  }
+
+  async getMessages(sampleCollectionId: string): Promise<SampleCollectionMessage[]> {
+    return this.sampleCollectionMessageModel
+      .find({ sampleCollectionId })
+      .populate('userId', 'hoTen email')
+      .sort({ createdAt: 1 })
+      .exec();
+  }
+
+  async sendMessage(sampleCollectionId: string, userId: string, message: string): Promise<SampleCollectionMessage> {
+    const newMessage = new this.sampleCollectionMessageModel({
+      sampleCollectionId,
+      userId,
+      message,
+    });
+    return newMessage.save();
   }
 }

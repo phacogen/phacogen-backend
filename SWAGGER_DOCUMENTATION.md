@@ -5,7 +5,7 @@
 Sau khi khởi động backend, bạn có thể truy cập Swagger documentation tại:
 
 ```
-http://localhost:5001/api-docs
+https://api.businessdigital-partners.com/api-docs
 ```
 
 ## Khởi động Backend
@@ -157,7 +157,7 @@ npm run start:prod
 
 ## Testing với Swagger UI
 
-1. Mở trình duyệt và truy cập `http://localhost:5001/api-docs`
+1. Mở trình duyệt và truy cập `https://api.businessdigital-partners.com/api-docs`
 2. Chọn endpoint muốn test
 3. Click "Try it out"
 4. Nhập dữ liệu vào các trường
