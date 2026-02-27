@@ -1233,6 +1233,21 @@ export class SampleCollectionService {
 
     for (const clinic of clinics) {
       try {
+        // Kiểm tra phòng khám có mở cửa hôm nay không (dựa trên gioLamViec mới)
+        let isClinicOpen = false;
+        if (clinic.gioLamViec && Array.isArray(clinic.gioLamViec)) {
+          const todaySchedule = clinic.gioLamViec.find((schedule: any) => schedule.day === dayOfWeek);
+          isClinicOpen = todaySchedule?.isOpen === true;
+        } else if (clinic.ngayLamViec && Array.isArray(clinic.ngayLamViec)) {
+          // Fallback to old ngayLamViec field for backward compatibility
+          isClinicOpen = clinic.ngayLamViec.includes(dayOfWeek);
+        }
+
+        if (!isClinicOpen) {
+          skipped++;
+          continue;
+        }
+
         // Kiểm tra xem có cấu hình nào khớp với ngày hôm nay không
         const cauHinhList = clinic.cauHinhTuDongTaoLenh || [];
 

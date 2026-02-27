@@ -64,13 +64,38 @@ export class Clinic extends Document {
   @Prop()
   linkZalo?: string;
 
+  @Prop({
+    type: [{
+      day: Number, // 0=CN, 1=T2, 2=T3, 3=T4, 4=T5, 5=T6, 6=T7
+      isOpen: Boolean,
+      openTime: String, // Format: "08:00"
+      closeTime: String, // Format: "17:00"
+    }],
+    default: [
+      { day: 1, isOpen: true, openTime: '08:00', closeTime: '17:00' },
+      { day: 2, isOpen: true, openTime: '08:00', closeTime: '17:00' },
+      { day: 3, isOpen: true, openTime: '08:00', closeTime: '17:00' },
+      { day: 4, isOpen: true, openTime: '08:00', closeTime: '17:00' },
+      { day: 5, isOpen: true, openTime: '08:00', closeTime: '17:00' },
+      { day: 6, isOpen: true, openTime: '08:00', closeTime: '12:00' },
+      { day: 0, isOpen: false, openTime: '', closeTime: '' },
+    ]
+  })
+  gioLamViec?: Array<{
+    day: number;
+    isOpen: boolean;
+    openTime: string;
+    closeTime: string;
+  }>;
+
+  // Deprecated - kept for backward compatibility
   @Prop()
-  gioMoCua?: string; // Format: "08:00"
+  gioMoCua?: string;
 
   @Prop()
-  gioDongCua?: string; // Format: "17:00"
+  gioDongCua?: string;
 
-  @Prop({ type: [Number], default: [1, 2, 3, 4, 5, 6] }) // 0=CN, 1=T2, 2=T3, 3=T4, 4=T5, 5=T6, 6=T7
+  @Prop({ type: [Number] })
   ngayLamViec?: number[];
 }
 
