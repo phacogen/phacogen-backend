@@ -43,7 +43,7 @@ export class EmailService {
   ): Promise<{ success: boolean; message: string }> {
     try {
       const smtpFrom = this.configService.get<string>('SMTP_FROM') || this.configService.get<string>('SMTP_USER');
-      
+
       // Tạo HTML hiển thị ảnh inline
       const imageHtml = imageUrls.map((url, index) => {
         const cid = `image${index}@phacogen.com`;
@@ -54,14 +54,14 @@ export class EmailService {
           </div>
         `;
       }).join('');
-      
-      // Tạo attachments từ image URLs
+
+      // Tạo attachments từ image URLs - sử dụng URL trực tiếp với href
       const attachments = imageUrls.map((url, index) => ({
         filename: `anh-hoan-thanh-${index + 1}.jpg`,
-        path: url,
+        href: url, // Sử dụng href thay vì path để nodemailer tự download
         cid: `image${index}@phacogen.com`,
       }));
-      
+
       const mailOptions = {
         from: smtpFrom,
         to: clinicEmail,
@@ -73,7 +73,7 @@ export class EmailService {
               <!-- Header với logo hoặc tên công ty -->
               <div style="text-align: center; margin-bottom: 30px;">
                 <h1 style="color: #1976d2; margin: 0; font-size: 24px;">PHACOGEN</h1>
-                <p style="color: #666; margin: 5px 0 0 0; font-size: 14px;">Công ty Cổ phần Công nghệ Sinh học Phacogen</p>
+                <p style="color: #666; margin: 5px 0 0 0; font-size: 14px;">Công ty Cổ phần Y Dược Phacogen</p>
               </div>
               
               <!-- Nội dung chính -->
@@ -88,13 +88,13 @@ export class EmailService {
               <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
                 <p style="margin: 0 0 10px 0; font-size: 15px; color: #333;">
                   📅 <strong>Thời gian nhận mẫu:</strong> ${new Date(completionTime).toLocaleString('vi-VN', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: false
-                  })}
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        })}
                 </p>
                 <p style="margin: 0; font-size: 15px; color: #333;">
                   📋 <strong>Mã lệnh:</strong> ${orderCode}
@@ -127,10 +127,10 @@ export class EmailService {
               <!-- Footer -->
               <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
                 <p style="margin: 0 0 5px 0; font-size: 14px; color: #1976d2; font-weight: bold;">
-                  CÔNG TY CỔ PHẦN CÔNG NGHỆ SINH HỌC PHACOGEN
+                  Công ty Cổ phần Y Dược Phacogen
                 </p>
                 <p style="margin: 0; font-size: 12px; color: #666; line-height: 1.5;">
-                  Hotline: 1900-xxxx | Email: info@phacogen.com<br/>
+                  Hotline: 086 200 3200	 | Email: ptmkq@phacogen.com<br/>
                   Website: www.phacogen.com
                 </p>
               </div>
@@ -178,9 +178,9 @@ export class EmailService {
     employeeName: string
   ): Promise<{ success: boolean; message: string }> {
     try {
-      const smtpFrom = this.configService.get<string>('SMTP_FROM') || 
-                       this.configService.get<string>('SMTP_USER');
-      
+      const smtpFrom = this.configService.get<string>('SMTP_FROM') ||
+        this.configService.get<string>('SMTP_USER');
+
       // Tạo HTML hiển thị ảnh inline
       const imageHtml = imageUrls.map((url, index) => {
         const cid = `image${index}@phacogen.com`;
@@ -191,14 +191,14 @@ export class EmailService {
           </div>
         `;
       }).join('');
-      
-      // Tạo attachments từ image URLs
-      const attachments = imageUrls.map((url, index) => ({
+
+      // Tạo attachments từ file paths - đọc file từ disk
+      const attachments = imageUrls.map((filePath, index) => ({
         filename: `anh-hoan-thanh-${index + 1}.jpg`,
-        path: url,
-        cid: `image${index}@phacogen.com`, // Content ID để nhúng ảnh vào HTML
+        path: filePath, // Đường dẫn file local
+        cid: `image${index}@phacogen.com`,
       }));
-      
+
       const mailOptions = {
         from: smtpFrom,
         to: clinicEmail,
@@ -210,7 +210,7 @@ export class EmailService {
               <!-- Header -->
               <div style="text-align: center; margin-bottom: 30px;">
                 <h1 style="color: #1976d2; margin: 0; font-size: 24px;">PHACOGEN</h1>
-                <p style="color: #666; margin: 5px 0 0 0; font-size: 14px;">Công ty Cổ phần Công nghệ Sinh học Phacogen</p>
+                <p style="color: #666; margin: 5px 0 0 0; font-size: 14px;">Công ty Cổ phần Y Dược Phacogen</p>
               </div>
               
               <!-- Thông báo chính -->
@@ -240,13 +240,13 @@ export class EmailService {
                 </p>
                 <p style="margin: 0; font-size: 14px; color: #333;">
                   <strong>Thời gian nhận mẫu:</strong> ${new Date(completionTime).toLocaleString('vi-VN', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: false
-                  })}
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        })}
                 </p>
               </div>
               
@@ -269,10 +269,10 @@ export class EmailService {
               <!-- Footer -->
               <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
                 <p style="margin: 0 0 5px 0; font-size: 14px; color: #1976d2; font-weight: bold;">
-                  CÔNG TY CỔ PHẦN CÔNG NGHỆ SINH HỌC PHACOGEN
+                  Công ty Cổ phần Y Dược Phacogen
                 </p>
                 <p style="margin: 0; font-size: 12px; color: #666; line-height: 1.5;">
-                  Hotline: 1900-xxxx | Email: info@phacogen.com<br/>
+                  Hotline: 086 200 3200	 | Email: ptmkq@phacogen.com<br/>
                   Website: www.phacogen.com
                 </p>
               </div>

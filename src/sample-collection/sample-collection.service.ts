@@ -958,8 +958,13 @@ export class SampleCollectionService {
         continue;
       }
 
-      // Lấy ảnh hoàn thành kiểm tra của phòng khám này
-      const imageUrls = item.anhHoanThanhKiemTra || [];
+      // Lấy ảnh hoàn thành kiểm tra của phòng khám này - chỉ lấy đường dẫn file
+      const imagePaths = (item.anhHoanThanhKiemTra || []).map(url => {
+        // Loại bỏ domain nếu có, chỉ giữ path
+        const path = url.replace(/^https?:\/\/[^\/]+/, '');
+        // Convert path thành đường dẫn file thực tế
+        return path.startsWith('/') ? `.${path}` : `./${path}`;
+      });
 
       const result = await this.emailService.sendCompletionEmail(
         clinic.email,
@@ -967,7 +972,7 @@ export class SampleCollectionService {
         collection.maLenh,
         new Date(),
         employeeName,
-        imageUrls, // Truyền ảnh vào
+        imagePaths, // Truyền đường dẫn file local
       );
 
       if (result.success) {
@@ -1208,12 +1213,51 @@ export class SampleCollectionService {
       const admins = await this.getAdminUsers();
       admins.forEach(admin => recipientIds.add(admin._id.toString()));
 
-      // Gửi thông báo cho tất cả người nhận
+      // Lấy thông tin chi tiết cho thông báo
+      let locationInfo = '';
+      if (order.tenNhaXe) {
+        locationInfo = ` tại nhà xe ${order.tenNhaXe}`;
+      } else if (order.phongKhamItems && order.phongKhamItems.length > 0) {
+        const firstClinic = order.phongKhamItems[0].phongKham as any;
+        locationInfo = ` tại phòng khám ${firstClinic?.tenPhongKham || 'N/A'}`;
+      }
+
+      // Lấy tên nhân viên
+      const employeeName = order.nhanVienThucHien
+        ? (typeof order.nhanVienThucHien === 'object'
+          ? (order.nhanVienThucHien as any).hoTen
+          : 'nhân viên')
+        : 'chưa giao';
+
+      // Tính thời gian quá hạn
+      const now = new Date();
+      const deadline = new Date(order.thoiGianHenHoanThanh);
+      const overdueHours = Math.floor((now.getTime() - deadline.getTime()) / (1000 * 60 * 60));
+      const overdueMinutes = Math.floor(((now.getTime() - deadline.getTime()) % (1000 * 60 * 60)) / (1000 * 60));
+      
+      let overdueText = '';
+      if (overdueHours > 0) {
+        overdueText = `${overdueHours} giờ ${overdueMinutes} phút`;
+      } else {
+        overdueText = `${overdueMinutes} phút`;
+      }
+
+      // Trạng thái hiện tại
+      const statusLabels: Record<string, string> = {
+        CHO_DIEU_PHOI: 'Chờ điều phối',
+        DANG_THUC_HIEN: 'Đang thực hiện',
+        HOAN_THANH: 'Hoàn thành',
+        HOAN_THANH_KIEM_TRA: 'Hoàn thành kiểm tra',
+        DA_HUY: 'Đã hủy',
+      };
+      const currentStatus = statusLabels[order.trangThai] || order.trangThai;
+
+      // Gửi thông báo cho tất cả người nhận với thông tin chi tiết
       for (const userId of recipientIds) {
         await this.notificationService.create({
           userId,
-          title: 'Lệnh thu mẫu quá hạn',
-          message: `Lệnh ${order.maLenh} đã quá hạn hoàn thành`,
+          title: '⚠️ Lệnh thu mẫu quá hạn',
+          message: `Lệnh ${order.maLenh}${locationInfo} đã quá hạn ${overdueText}. Nhân viên: ${employeeName}. Trạng thái: ${currentStatus}`,
           type: NotificationType.ORDER_OVERDUE,
           relatedOrderId: order._id.toString(),
         });
@@ -1314,8 +1358,7 @@ export class SampleCollectionService {
             nguoiGiaoLenh,
             ghiChu: cauHinh.ghiChuLenh || '',
             uuTien: cauHinh.lenhUuTien || false,
-            nhanVienThucHien: clinic.nhanVienPhuTrach || undefined,
-            trangThai: SampleCollectionStatus.DANG_THUC_HIEN,
+            trangThai: SampleCollectionStatus.CHO_DIEU_PHOI,
             thoiGianHenHoanThanh,
             phongKhamItems: [{
               phongKham: clinic._id.toString(),
@@ -1417,8 +1460,8 @@ export class SampleCollectionService {
       .populate('phongKhamKiemTra')
       .exec();
 
-    // Gửi email cho từng phòng khám
-    await this.sendBusStationClinicEmails(updated);
+    // Không tự động gửi email - chỉ gửi khi người dùng click nút "Gửi lại email"
+    // await this.sendBusStationClinicEmails(updated);
 
     // Lưu lịch sử
     await this.saveHistory(
