@@ -10,8 +10,19 @@ export class ClinicService {
   async create(data: any): Promise<Clinic> {
     // Auto-generate maPhongKham if not provided
     if (!data.maPhongKham) {
-      const count = await this.clinicModel.countDocuments().exec();
-      data.maPhongKham = `PK${String(count + 1).padStart(4, '0')}`;
+      // Find the highest existing clinic code
+      const lastClinic = await this.clinicModel
+        .findOne({ maPhongKham: /^PK\d+$/ })
+        .sort({ maPhongKham: -1 })
+        .exec();
+
+      let nextNumber = 1;
+      if (lastClinic && lastClinic.maPhongKham) {
+        const lastNumber = parseInt(lastClinic.maPhongKham.replace('PK', ''));
+        nextNumber = lastNumber + 1;
+      }
+
+      data.maPhongKham = `PK${String(nextNumber).padStart(4, '0')}`;
     }
     
     const clinic = new this.clinicModel(data);

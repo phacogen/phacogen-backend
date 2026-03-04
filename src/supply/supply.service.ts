@@ -28,8 +28,19 @@ export class SupplyService {
   async createSupply(createSupplyDto: CreateSupplyDto): Promise<SupplyDocument> {
     // Auto-generate maVatTu if not provided
     if (!createSupplyDto.maVatTu) {
-      const count = await this.supplyModel.countDocuments().exec();
-      createSupplyDto.maVatTu = `VT${String(count + 1).padStart(4, '0')}`;
+      // Find the highest existing supply code
+      const lastSupply = await this.supplyModel
+        .findOne({ maVatTu: /^VT\d+$/ })
+        .sort({ maVatTu: -1 })
+        .exec();
+
+      let nextNumber = 1;
+      if (lastSupply && lastSupply.maVatTu) {
+        const lastNumber = parseInt(lastSupply.maVatTu.replace('VT', ''));
+        nextNumber = lastNumber + 1;
+      }
+
+      createSupplyDto.maVatTu = `VT${String(nextNumber).padStart(4, '0')}`;
     }
 
     const supply = new this.supplyModel(createSupplyDto);

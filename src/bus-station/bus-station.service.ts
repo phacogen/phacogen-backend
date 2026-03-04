@@ -14,8 +14,19 @@ export class BusStationService {
   async create(createBusStationDto: CreateBusStationDto): Promise<BusStation> {
     // Auto-generate maNhaXe if not provided
     if (!createBusStationDto.maNhaXe) {
-      const count = await this.busStationModel.countDocuments().exec();
-      createBusStationDto.maNhaXe = `NX${String(count + 1).padStart(4, '0')}`;
+      // Find the highest existing bus station code
+      const lastBusStation = await this.busStationModel
+        .findOne({ maNhaXe: /^NX\d+$/ })
+        .sort({ maNhaXe: -1 })
+        .exec();
+
+      let nextNumber = 1;
+      if (lastBusStation && lastBusStation.maNhaXe) {
+        const lastNumber = parseInt(lastBusStation.maNhaXe.replace('NX', ''));
+        nextNumber = lastNumber + 1;
+      }
+
+      createBusStationDto.maNhaXe = `NX${String(nextNumber).padStart(4, '0')}`;
     }
     
     const busStation = new this.busStationModel(createBusStationDto);

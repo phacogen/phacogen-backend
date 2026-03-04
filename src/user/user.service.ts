@@ -13,8 +13,19 @@ export class UserService {
   async create(data: any): Promise<User> {
     // Auto-generate maNhanVien if not provided
     if (!data.maNhanVien) {
-      const count = await this.userModel.countDocuments().exec();
-      data.maNhanVien = `NV${String(count + 1).padStart(4, '0')}`;
+      // Find the highest existing employee code
+      const lastUser = await this.userModel
+        .findOne({ maNhanVien: /^NV\d+$/ })
+        .sort({ maNhanVien: -1 })
+        .exec();
+
+      let nextNumber = 1;
+      if (lastUser && lastUser.maNhanVien) {
+        const lastNumber = parseInt(lastUser.maNhanVien.replace('NV', ''));
+        nextNumber = lastNumber + 1;
+      }
+
+      data.maNhanVien = `NV${String(nextNumber).padStart(4, '0')}`;
     }
     
     const user = new this.userModel(data);
