@@ -436,7 +436,10 @@ export class SupplyService {
     // Convert string to ObjectId for proper MongoDB query
     const objectId = new Types.ObjectId(supplyId);
 
-    const filter: any = { vatTu: objectId };
+    const filter: any = {
+      vatTu: objectId,
+      loaiThayDoi: { $ne: HistoryType.NHAN_MAU_VE }
+    };
 
     if (params?.startDate || params?.endDate) {
       filter.thoiGian = {};
