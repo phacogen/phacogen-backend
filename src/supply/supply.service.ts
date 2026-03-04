@@ -1367,13 +1367,13 @@ export class SupplyService {
         selectedAllocation.markModified('danhSachVatTu');
         await selectedAllocation.save();
 
-        // Save history record with soLuong = 0 to track sample returns without affecting warehouse inventory
-        // This is only for tracking purposes and will appear in sample return history
+        // Save history record for tracking sample returns
+        // Note: This is clinic-level tracking and should NOT affect warehouse inventory
         await this.saveHistory({
           vatTu: record.supplyId,
           loaiThayDoi: HistoryType.NHAN_MAU_VE,
-          soLuong: 0,
-          lyDo: `Nhận ${record.soLuongNhan} mẫu về từ ${record.clinicName} - Ngày: ${record.ngayNhanMau.toISOString().split('T')[0]}`,
+          soLuong: record.soLuongNhan,
+          lyDo: `Nhận mẫu về từ ${record.clinicName} - Ngày: ${record.ngayNhanMau.toISOString().split('T')[0]}`,
           nguoiThucHien: nguoiNhap,
           phieuCapPhat: selectedAllocation._id,
           thoiGian: record.ngayNhanMau,
