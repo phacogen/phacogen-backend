@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Schema as MongooseSchema, Types } from 'mongoose';
 
 export type SupplyAllocationDocument = SupplyAllocation & Document;
 
@@ -19,8 +19,18 @@ export interface SupplyItem {
   vatTu: Types.ObjectId; // Reference to Supply
   tenVatTu: string; // Tên vật tư (lưu để hiển thị)
   soLuong: number; // Số lượng cấp
+  soLuongDaNhan?: number; // Số lượng đã nhận về (từ phòng khám)
   hanSuDung?: Date; // Hạn sử dụng (tùy chọn)
 }
+
+// Define sub-schema for SupplyItem
+const SupplyItemSchema = new MongooseSchema({
+  vatTu: { type: MongooseSchema.Types.ObjectId, ref: 'Supply', required: true },
+  tenVatTu: { type: String, required: true },
+  soLuong: { type: Number, required: true },
+  soLuongDaNhan: { type: Number, default: 0 },
+  hanSuDung: { type: Date },
+}, { _id: false });
 
 @Schema({ timestamps: true })
 export class SupplyAllocation {
@@ -33,20 +43,20 @@ export class SupplyAllocation {
   @Prop({ type: Types.ObjectId, ref: 'Clinic', required: true })
   phongKham: Types.ObjectId; // Phòng khám nhận
 
-  @Prop({ 
-    type: String, 
-    enum: DeliveryMethod, 
-    required: true 
+  @Prop({
+    type: String,
+    enum: DeliveryMethod,
+    required: true
   })
   hinhThucVanChuyen: DeliveryMethod;
 
-  @Prop({ type: [Object], required: true })
+  @Prop({ type: [SupplyItemSchema], required: true })
   danhSachVatTu: SupplyItem[]; // Danh sách vật tư cấp
 
-  @Prop({ 
-    type: String, 
-    enum: AllocationStatus, 
-    default: AllocationStatus.CHO_CHUAN_BI 
+  @Prop({
+    type: String,
+    enum: AllocationStatus,
+    default: AllocationStatus.CHO_CHUAN_BI
   })
   trangThai: AllocationStatus;
 

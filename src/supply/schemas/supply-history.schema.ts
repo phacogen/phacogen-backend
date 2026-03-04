@@ -8,6 +8,7 @@ export enum HistoryType {
   XUAT_CAP = 'XUAT_CAP', // Xuất cấp
   HOAN_KHO = 'HOAN_KHO', // Hoàn kho (do xóa phiếu)
   DIEU_CHINH = 'DIEU_CHINH', // Điều chỉnh kho
+  NHAN_MAU_VE = 'NHAN_MAU_VE', // Nhận mẫu về từ phòng khám
 }
 
 @Schema({ timestamps: true })

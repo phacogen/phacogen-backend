@@ -55,7 +55,7 @@ export class SupplyController {
     FileInterceptor('file', {
       storage: diskStorage({
         destination: './uploads/supplies',
-        filename: (req, file, cb) => {
+        filename: (_req, file, cb) => {
           const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
           const ext = extname(file.originalname);
           cb(null, `supply-${uniqueSuffix}${ext}`);
@@ -102,7 +102,7 @@ export class SupplyController {
     FileInterceptor('file', {
       storage: diskStorage({
         destination: './uploads/deliveries',
-        filename: (req, file, cb) => {
+        filename: (_req, file, cb) => {
           const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
           const ext = extname(file.originalname);
           cb(null, `delivery-${uniqueSuffix}${ext}`);
@@ -352,4 +352,108 @@ export class SupplyController {
       endDate,
     });
   }
+
+  @Get('reports/allocation-detail')
+  @ApiOperation({ summary: 'Báo cáo chi tiết theo phiếu cấp' })
+  @ApiQuery({ name: 'phongKham', description: 'Lọc theo phòng khám', required: false })
+  @ApiQuery({ name: 'search', description: 'Tìm kiếm theo mã phiếu, vật tư', required: false })
+  @ApiQuery({ name: 'startDate', description: 'Ngày bắt đầu (ISO format)', required: false })
+  @ApiQuery({ name: 'endDate', description: 'Ngày kết thúc (ISO format)', required: false })
+  @ApiQuery({ name: 'page', description: 'Số trang (bắt đầu từ 1)', required: false, type: Number })
+  @ApiQuery({ name: 'limit', description: 'Số lượng mỗi trang', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Báo cáo chi tiết phiếu cấp' })
+  getAllocationDetailReport(
+    @Query('phongKham') phongKham?: string,
+    @Query('search') search?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.supplyService.getAllocationDetailReport({
+      phongKham,
+      search,
+      startDate,
+      endDate,
+      page: page ? parseInt(page) : undefined,
+      limit: limit ? parseInt(limit) : undefined,
+    });
+  }
+
+  // ============ NHẬP SỐ LƯỢNG MẪU NHẬN VỀ ============
+
+  @Get('allocations/sample-return/history')
+  @ApiOperation({ summary: 'Lấy lịch sử nhập mẫu nhận về' })
+  @ApiQuery({ name: 'phongKham', description: 'Lọc theo phòng khám', required: false })
+  @ApiQuery({ name: 'vatTu', description: 'Lọc theo vật tư', required: false })
+  @ApiQuery({ name: 'startDate', description: 'Ngày bắt đầu (ISO format)', required: false })
+  @ApiQuery({ name: 'endDate', description: 'Ngày kết thúc (ISO format)', required: false })
+  @ApiQuery({ name: 'page', description: 'Số trang (bắt đầu từ 1)', required: false, type: Number })
+  @ApiQuery({ name: 'limit', description: 'Số lượng mỗi trang', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Lịch sử nhập mẫu' })
+  getSampleReturnHistory(
+    @Query('phongKham') phongKham?: string,
+    @Query('vatTu') vatTu?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.supplyService.getSampleReturnHistory({
+      phongKham,
+      vatTu,
+      startDate,
+      endDate,
+      page: page ? parseInt(page) : undefined,
+      limit: limit ? parseInt(limit) : undefined,
+    });
+  }
+
+  @Get('allocations/sample-return/template/download')
+  @ApiOperation({ summary: 'Tải file Excel mẫu cho nhập số lượng mẫu nhận về' })
+  @ApiResponse({ status: 200, description: 'File Excel mẫu' })
+  async downloadSampleReturnTemplate(@Res() res: Response) {
+    const { buffer, filename } = await this.supplyService.generateSampleReturnTemplate();
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }
+
+  @Post('allocations/sample-return/import/excel')
+  @ApiOperation({ summary: 'Nhập số lượng mẫu nhận về từ file Excel' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+        nguoiNhap: {
+          type: 'string',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Nhập thành công' })
+  @ApiResponse({ status: 400, description: 'File không hợp lệ hoặc dữ liệu sai' })
+  @UseInterceptors(FileInterceptor('file'))
+  async importSampleReturn(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('nguoiNhap') nguoiNhap: string,
+  ) {
+    return this.supplyService.importSampleReturnFromExcel(file, nguoiNhap);
+  }
+
+  @Delete('allocations/sample-return/history/:id')
+  @ApiOperation({ summary: 'Xóa bản ghi lịch sử nhập mẫu nhận về' })
+  @ApiResponse({ status: 200, description: 'Xóa thành công' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy bản ghi' })
+  async deleteSampleReturnHistory(@Param('id') id: string) {
+    return this.supplyService.deleteSampleReturnHistory(id);
+  }
+
+ 
 }

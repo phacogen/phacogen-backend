@@ -31,7 +31,7 @@ export class SupplyService {
       const count = await this.supplyModel.countDocuments().exec();
       createSupplyDto.maVatTu = `VT${String(count + 1).padStart(4, '0')}`;
     }
-    
+
     const supply = new this.supplyModel(createSupplyDto);
     return supply.save();
   }
@@ -235,12 +235,22 @@ export class SupplyService {
     const data = await this.allocationModel
       .find(filter)
       .populate('nguoiTaoPhieu', 'hoTen')
-      .populate('phongKham', 'tenPhongKham')
+      .populate('phongKham', 'maPhongKham tenPhongKham')
       .populate('nguoiGiaoHang', 'hoTen')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .exec();
+
+    // Populate maVatTu for each supply item in danhSachVatTu
+    for (const allocation of data) {
+      for (const item of allocation.danhSachVatTu) {
+        const supply = await this.supplyModel.findById(item.vatTu).select('maVatTu').exec();
+        if (supply) {
+          (item as any).maVatTu = supply.maVatTu;
+        }
+      }
+    }
 
     return {
       data,
@@ -675,6 +685,117 @@ export class SupplyService {
 
   // ============ BÁO CÁO TỒN KHO ============
 
+  async getAllocationDetailReport(params?: {
+    phongKham?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    data: any[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const { phongKham, search, startDate, endDate, page = 1, limit = 10 } = params || {};
+
+    const filter: any = {
+      trangThai: AllocationStatus.DA_GIAO,
+    };
+
+    if (phongKham) {
+      filter.phongKham = phongKham; // Use string instead of ObjectId
+    }
+
+    if (startDate || endDate) {
+      filter.ngayGiao = {};
+      if (startDate) {
+        filter.ngayGiao.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.ngayGiao.$lte = end;
+      }
+    }
+
+    // Search by maPhieu or supply name
+    if (search) {
+      filter.$or = [
+        { maPhieu: { $regex: search, $options: 'i' } },
+        { 'danhSachVatTu.tenVatTu': { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+    const total = await this.allocationModel.countDocuments(filter).exec();
+
+    const allocations = await this.allocationModel
+      .find(filter)
+      .populate('phongKham', 'maPhongKham tenPhongKham')
+      .sort({ ngayGiao: -1 })
+      .skip(skip)
+      .limit(limit)
+      .exec();
+
+    // Flatten data - one row per supply item
+    const data: any[] = [];
+    const now = new Date();
+    now.setHours(0, 0, 0, 0); // Reset to start of day for comparison
+    
+    for (const allocation of allocations) {
+      for (const item of allocation.danhSachVatTu) {
+        const soLuongDaNhan = item.soLuongDaNhan || 0;
+        const soLuongTon = item.soLuong - soLuongDaNhan;
+        const tyLeSuDung = item.soLuong > 0 ? Math.round((soLuongDaNhan / item.soLuong) * 100) : 0;
+
+        // Calculate expiry warning
+        let hanSuDung = null;
+        let canhBaoHan = 'Chưa có thông tin';
+        
+        if (item.hanSuDung) {
+          hanSuDung = item.hanSuDung;
+          const expiryDate = new Date(item.hanSuDung);
+          expiryDate.setHours(0, 0, 0, 0);
+          
+          const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          
+          if (daysUntilExpiry < 0) {
+            canhBaoHan = 'Đã hết hạn';
+          } else if (daysUntilExpiry <= 3) {
+            canhBaoHan = 'Sắp hết hạn';
+          } else {
+            canhBaoHan = 'Chưa đến hạn';
+          }
+        }
+
+        data.push({
+          _id: `${allocation._id}_${item.vatTu}`,
+          ngayCap: allocation.ngayGiao,
+          maPhieu: allocation.maPhieu,
+          phongKham: (allocation.phongKham as any)?.tenPhongKham || '',
+          tenVatTu: item.tenVatTu,
+          soLuongCap: item.soLuong,
+          soLuongDaDung: soLuongDaNhan,
+          tonKho: soLuongTon,
+          tyLeSuDung: `${tyLeSuDung}%`,
+          hanSuDung: hanSuDung,
+          canhBaoHan: canhBaoHan,
+        });
+      }
+    }
+
+    return {
+      data,
+      total: data.length,
+      page,
+      limit,
+      totalPages: Math.ceil(data.length / limit),
+    };
+  }
+
   async getInventoryReport(params?: {
     phongKham?: string;
     vatTu?: string;
@@ -683,166 +804,658 @@ export class SupplyService {
   }): Promise<any> {
     const { phongKham, vatTu, startDate, endDate } = params || {};
 
-    // Build filter for allocations
+    // Get all delivered allocations
     const allocationFilter: any = {
       trangThai: AllocationStatus.DA_GIAO,
     };
 
     if (phongKham) {
-      allocationFilter.phongKham = new Types.ObjectId(phongKham);
+      allocationFilter.phongKham = phongKham; // Use string
     }
 
-    if (startDate || endDate) {
-      allocationFilter.ngayGiao = {};
-      if (startDate) {
-        allocationFilter.ngayGiao.$gte = new Date(startDate);
-      }
-      if (endDate) {
-        allocationFilter.ngayGiao.$lte = new Date(endDate);
-      }
-    }
-
-    // Get all delivered allocations with populated data
     const allocations = await this.allocationModel
       .find(allocationFilter)
-      .populate('phongKham')
+      .populate('phongKham', 'maPhongKham tenPhongKham')
       .exec();
 
-    // Get all supplies
-    const supplies = await this.supplyModel.find().exec();
+    // Get all sample return history
+    const historyFilter: any = {
+      loaiThayDoi: HistoryType.NHAN_MAU_VE,
+    };
 
-    // Build report data - one row per (supply, clinic) combination
-    const reportData: any[] = [];
-    const clinicSupplyMap: Map<string, any> = new Map();
+    const sampleReturnHistory = await this.historyModel
+      .find(historyFilter)
+      .populate('phieuCapPhat')
+      .exec();
 
-    // First, collect all usage data by clinic and supply
+    // Build report data grouped by (clinic, supply)
+    const reportMap: Map<string, any> = new Map();
+
+    // Process allocations
     for (const allocation of allocations) {
-      const clinicId = allocation.phongKham._id.toString();
+      const clinicId = (allocation.phongKham as any)._id.toString();
       const clinicName = (allocation.phongKham as any).tenPhongKham;
 
       for (const supplyItem of allocation.danhSachVatTu) {
         const supplyId = supplyItem.vatTu.toString();
         const key = `${clinicId}_${supplyId}`;
 
-        if (!clinicSupplyMap.has(key)) {
-          clinicSupplyMap.set(key, {
+        if (!reportMap.has(key)) {
+          reportMap.set(key, {
             clinicId,
             clinicName,
             supplyId,
             soLuongCap: 0,
             soLuongDaDung: 0,
+            lastReturnDate: null,
           });
         }
 
-        const entry = clinicSupplyMap.get(key);
+        const entry = reportMap.get(key);
         entry.soLuongCap += supplyItem.soLuong;
-        entry.soLuongDaDung += supplyItem.soLuong; // Assume all allocated is used
+        entry.soLuongDaDung += supplyItem.soLuongDaNhan || 0;
       }
     }
 
-    // Now create report rows
-    for (const supply of supplies) {
+    // Process sample return history to find last return date
+    for (const history of sampleReturnHistory) {
+      if (!history.phieuCapPhat) continue;
+
+      const allocation = await this.allocationModel
+        .findById(history.phieuCapPhat)
+        .populate('phongKham')
+        .exec();
+
+      if (!allocation) continue;
+
+      const clinicId = (allocation.phongKham as any)._id.toString();
+      const supplyId = history.vatTu.toString();
+      const key = `${clinicId}_${supplyId}`;
+
+      if (reportMap.has(key)) {
+        const entry = reportMap.get(key);
+        const returnDate = history.thoiGian;
+
+        if (!entry.lastReturnDate || returnDate > entry.lastReturnDate) {
+          entry.lastReturnDate = returnDate;
+        }
+      }
+    }
+
+    // Calculate previous month usage
+    const now = new Date();
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+    const lastMonthHistory = await this.historyModel
+      .find({
+        loaiThayDoi: HistoryType.NHAN_MAU_VE,
+        thoiGian: {
+          $gte: lastMonthStart,
+          $lte: lastMonthEnd,
+        },
+      })
+      .populate('phieuCapPhat')
+      .exec();
+
+    const lastMonthUsageMap: Map<string, number> = new Map();
+
+    for (const history of lastMonthHistory) {
+      if (!history.phieuCapPhat) continue;
+
+      const allocation = await this.allocationModel
+        .findById(history.phieuCapPhat)
+        .populate('phongKham')
+        .exec();
+
+      if (!allocation) continue;
+
+      const clinicId = (allocation.phongKham as any)._id.toString();
+      const supplyId = history.vatTu.toString();
+      const key = `${clinicId}_${supplyId}`;
+
+      const currentUsage = lastMonthUsageMap.get(key) || 0;
+      lastMonthUsageMap.set(key, currentUsage + history.soLuong);
+    }
+
+    // Get all supplies
+    const supplies = await this.supplyModel.find().exec();
+    const supplyMap = new Map(supplies.map(s => [s._id.toString(), s]));
+
+    // Build final report
+    const reportData: any[] = [];
+
+    for (const [key, entry] of reportMap.entries()) {
+      const supply = supplyMap.get(entry.supplyId);
+      if (!supply) continue;
+
       // Skip if filtering by specific supply
       if (vatTu && supply._id.toString() !== vatTu) {
         continue;
       }
 
-      const supplyId = supply._id.toString();
+      const soLuongTon = entry.soLuongCap - entry.soLuongDaDung;
+      const lastMonthUsage = lastMonthUsageMap.get(key) || 0;
 
-      // Find all clinics that received this supply
-      const clinicsForSupply: any[] = [];
-      for (const [key, entry] of clinicSupplyMap.entries()) {
-        if (entry.supplyId === supplyId) {
-          clinicsForSupply.push(entry);
+      // Calculate date warning
+      let canhBaoNgay = 'Bình thường';
+      let ngayGuiMauGanNhat = 'Chưa gửi';
+      
+      if (entry.lastReturnDate) {
+        ngayGuiMauGanNhat = entry.lastReturnDate.toISOString().split('T')[0];
+        const daysSinceLastReturn = Math.floor(
+          (now.getTime() - entry.lastReturnDate.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        if (daysSinceLastReturn > 7) {
+          canhBaoNgay = 'Lâu chưa gửi mẫu';
         }
       }
 
-      // If no clinics received this supply, create one row with zero usage
-      if (clinicsForSupply.length === 0) {
-        const tonKho = supply.tonKho;
-        const canhBaoNgay = 'N/A';
-        const canhBaoTonKho = this.calculateStockWarning(tonKho, supply.mucToiThieu);
-
-        reportData.push({
-          _id: `${supply._id}_no_clinic`,
-          maVatTu: supply.maVatTu,
-          tenVatTu: supply.tenVatTu,
-          donVi: supply.donVi,
-          tenPhongKham: 'Chưa cấp',
-          soLuongCap: 0,
-          soLuongDaDung: 0,
-          soLuongTon: tonKho,
-          mucToiThieu: supply.mucToiThieu,
-          canhBaoNgay,
-          canhBaoTonKho,
-        });
-      } else {
-        // Create one row for each clinic
-        for (const clinicEntry of clinicsForSupply) {
-          const tonKho = supply.tonKho;
-          const canhBaoNgay = this.calculateDateWarning(
-            tonKho,
-            clinicEntry.soLuongDaDung,
-            startDate,
-            endDate
-          );
-          const canhBaoTonKho = this.calculateStockWarning(tonKho, supply.mucToiThieu);
-
-          reportData.push({
-            _id: `${supply._id}_${clinicEntry.clinicId}`,
-            maVatTu: supply.maVatTu,
-            tenVatTu: supply.tenVatTu,
-            donVi: supply.donVi,
-            tenPhongKham: clinicEntry.clinicName,
-            soLuongCap: clinicEntry.soLuongCap,
-            soLuongDaDung: clinicEntry.soLuongDaDung,
-            soLuongTon: tonKho,
-            mucToiThieu: supply.mucToiThieu,
-            canhBaoNgay,
-            canhBaoTonKho,
-          });
-        }
+      // Calculate stock warning for clinic
+      let canhBaoTonKho = 'Đủ dùng';
+      if (soLuongTon <= 0) {
+        canhBaoTonKho = 'Hết';
+      } else if (soLuongTon <= 5) {
+        canhBaoTonKho = 'Sắp hết';
       }
+
+      reportData.push({
+        _id: key,
+        phongKham: entry.clinicName,
+        tenDungCu: supply.tenVatTu,
+        slCap: entry.soLuongCap,
+        slSuDung: entry.soLuongDaDung,
+        slTon: soLuongTon,
+        ngayGuiMauGanNhat,
+        canhBaoNgay,
+        canhBaoTonKho,
+        slSuDungThangTruoc: lastMonthUsage,
+      });
     }
 
     return reportData;
   }
 
-  private calculateDateWarning(tonKho: number, used: number, startDate?: string, endDate?: string): string {
-    if (!startDate || !endDate) {
-      return 'N/A';
+  // ============ NHẬP SỐ LƯỢNG MẪU NHẬN VỀ ============
+
+  async getSampleReturnHistory(params?: {
+    phongKham?: string;
+    vatTu?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    data: any[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const { phongKham, vatTu, startDate, endDate, page = 1, limit = 10 } = params || {};
+
+    const filter: any = {
+      loaiThayDoi: HistoryType.NHAN_MAU_VE,
+    };
+
+    if (vatTu) {
+      filter.vatTu = new Types.ObjectId(vatTu);
     }
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (days <= 0 || used <= 0) {
-      return 'N/A';
+    if (startDate || endDate) {
+      filter.thoiGian = {};
+      if (startDate) {
+        filter.thoiGian.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.thoiGian.$lte = end;
+      }
     }
 
-    const dailyUsage = used / days;
-    const daysRemaining = Math.floor(tonKho / dailyUsage);
+    const skip = (page - 1) * limit;
+    const total = await this.historyModel.countDocuments(filter).exec();
 
-    if (daysRemaining <= 0) {
-      return 'Hết đúng cú';
-    } else if (daysRemaining <= 3) {
-      return 'Lâu không gửi mẫu';
-    } else if (daysRemaining <= 7) {
-      return 'Bảo hết';
+    const histories = await this.historyModel
+      .find(filter)
+      .populate('vatTu', 'maVatTu tenVatTu donVi')
+      .populate('nguoiThucHien', 'hoTen')
+      .populate({
+        path: 'phieuCapPhat',
+        populate: {
+          path: 'phongKham',
+          select: 'maPhongKham tenPhongKham',
+        },
+      })
+      .sort({ thoiGian: -1 })
+      .skip(skip)
+      .limit(limit)
+      .exec();
+
+    // Filter by clinic if specified
+    let data = histories.map((h: any) => ({
+      _id: h._id,
+      ngayNhan: h.thoiGian,
+      phongKham: h.phieuCapPhat?.phongKham || null,
+      vatTu: h.vatTu,
+      soLuong: h.soLuong,
+      lyDo: h.lyDo,
+      nguoiNhap: h.nguoiThucHien,
+      maPhieu: h.phieuCapPhat?.maPhieu || '',
+      createdAt: h.createdAt,
+    }));
+
+    if (phongKham) {
+      data = data.filter((item) => item.phongKham?._id?.toString() === phongKham);
     }
 
-    return 'N/A';
+    return {
+      data,
+      total: phongKham ? data.length : total,
+      page,
+      limit,
+      totalPages: Math.ceil((phongKham ? data.length : total) / limit),
+    };
   }
 
-  private calculateStockWarning(tonKho: number, mucToiThieu: number): number {
-    // Return number of months the current stock can last
-    // This is a simplified calculation
-    if (mucToiThieu <= 0) {
-      return 0;
+  async generateSampleReturnTemplate(): Promise<any> {
+    // Get all delivered allocations
+    const allocations = await this.allocationModel
+      .find({ trangThai: AllocationStatus.DA_GIAO })
+      .populate('phongKham')
+      .sort({ ngayGiao: -1 })
+      .limit(100)
+      .exec();
+
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Template for data entry
+    const templateData = [
+      ['Ngày nhận mẫu', 'Mã PK', 'Mã VT', 'Số lượng vật tư'],
+      // Example rows
+      ['2026-03-03', 'PK001', 'VT001', 10],
+      ['2026-03-03', 'PK001', 'VT002', 5],
+    ];
+    const ws1 = XLSX.utils.aoa_to_sheet(templateData);
+    XLSX.utils.book_append_sheet(wb, ws1, 'Nhập liệu');
+
+    // Sheet 2: Clinic reference
+    const clinics = await this.allocationModel.db.collection('clinics').find().toArray();
+    const clinicData = [['Mã PK', 'Tên phòng khám']];
+    clinics.forEach((clinic: any) => {
+      clinicData.push([clinic.maPhongKham, clinic.tenPhongKham]);
+    });
+    const ws2 = XLSX.utils.aoa_to_sheet(clinicData);
+    XLSX.utils.book_append_sheet(wb, ws2, 'Danh sách PK');
+
+    // Sheet 3: Supply reference
+    const supplies = await this.supplyModel.find().select('maVatTu tenVatTu').exec();
+    const supplyData = [['Mã VT', 'Tên vật tư']];
+    supplies.forEach((supply: any) => {
+      supplyData.push([supply.maVatTu, supply.tenVatTu]);
+    });
+    const ws3 = XLSX.utils.aoa_to_sheet(supplyData);
+    XLSX.utils.book_append_sheet(wb, ws3, 'Danh sách VT');
+
+    // Sheet 4: Recent allocations for reference
+    const allocationData = [['Mã phiếu', 'Tên PK', 'Ngày giao', 'Vật tư đã cấp']];
+    for (const allocation of allocations) {
+      const clinic = allocation.phongKham as any;
+      const vatTuList = allocation.danhSachVatTu
+        .map((item) => `${item.tenVatTu} (${item.soLuong})`)
+        .join(', ');
+      allocationData.push([
+        allocation.maPhieu,
+        clinic.tenPhongKham,
+        allocation.ngayGiao ? new Date(allocation.ngayGiao).toISOString().split('T')[0] : '',
+        vatTuList,
+      ]);
+    }
+    const ws4 = XLSX.utils.aoa_to_sheet(allocationData);
+    XLSX.utils.book_append_sheet(wb, ws4, 'Phiếu đã giao');
+
+    // Sheet 5: Instructions
+    const instructions = [
+      ['HƯỚNG DẪN NHẬP SỐ LƯỢNG MẪU NHẬN VỀ'],
+      [''],
+      ['1. Ngày nhận mẫu: Nhập ngày nhận mẫu về'],
+      ['   - Định dạng khuyến nghị: YYYY-MM-DD (VD: 2026-02-03 cho ngày 3 tháng 2)'],
+      ['   - QUAN TRỌNG: Nếu nhập DD/MM/YYYY (VD: 3/2/2026), phải format cột thành TEXT trước'],
+      ['   - Cách format: Chọn cột A → Chuột phải → Format Cells → Text'],
+      [''],
+      ['2. Mã PK: Nhập mã phòng khám (xem sheet "Danh sách PK")'],
+      ['3. Mã VT: Nhập mã vật tư (xem sheet "Danh sách VT")'],
+      ['4. Số lượng vật tư: Nhập số lượng mẫu đã nhận về từ phòng khám'],
+      [''],
+      ['LƯU Ý QUAN TRỌNG:'],
+      ['- Mỗi dòng là một vật tư nhận về từ một phòng khám'],
+      ['- Hệ thống sẽ tự động trừ số lượng này vào phiếu cấp phát tương ứng'],
+      ['- Số lượng nhận về không được vượt quá số lượng đã cấp trong phiếu'],
+      ['- Xem sheet "Phiếu đã giao" để biết các phiếu đã giao và số lượng đã cấp'],
+      ['- Chỉ nhập cho các phiếu đã ở trạng thái "Đã giao"'],
+      ['- Mã PK phải khớp chính xác với mã trong hệ thống'],
+      [''],
+      ['VÍ DỤ:'],
+      ['Nếu đã cấp cho Phòng khám ABC: Bộ cấy tiểu 20 cái'],
+      ['Và nhận về: 15 cái'],
+      ['Thì còn lại: 5 cái chưa nhận về'],
+    ];
+    const ws5 = XLSX.utils.aoa_to_sheet(instructions);
+    XLSX.utils.book_append_sheet(wb, ws5, 'Hướng dẫn');
+
+    // Generate buffer
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    return {
+      buffer,
+      filename: `Mau_Nhap_Mau_Nhan_Ve_${new Date().toISOString().split('T')[0]}.xlsx`,
+    };
+  }
+
+  async importSampleReturnFromExcel(file: Express.Multer.File, nguoiNhap: string): Promise<any> {
+    if (!file) {
+      throw new BadRequestException('Không có file được tải lên');
     }
 
-    return Math.floor(tonKho / mucToiThieu);
+    try {
+      // Read Excel file
+      const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+
+      if (!sheetName) {
+        throw new BadRequestException('File Excel không có sheet nào');
+      }
+
+      const worksheet = workbook.Sheets[sheetName];
+      const data: any[] = XLSX.utils.sheet_to_json(worksheet);
+
+      if (data.length === 0) {
+        throw new BadRequestException('File Excel không có dữ liệu');
+      }
+
+      const errors: string[] = [];
+      const processedRecords: any[] = [];
+
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        const rowNum = i + 2; // Excel row number (header is row 1)
+
+        // Skip empty rows
+        if (!row['Ngày nhận mẫu'] && !row['Mã PK'] && !row['Mã VT'] && !row['Số lượng vật tư']) {
+          continue;
+        }
+
+        // Validate required fields
+        if (!row['Ngày nhận mẫu']) {
+          errors.push(`Dòng ${rowNum}: Thiếu ngày nhận mẫu`);
+          continue;
+        }
+        if (!row['Mã PK']) {
+          errors.push(`Dòng ${rowNum}: Thiếu mã phòng khám`);
+          continue;
+        }
+        if (!row['Mã VT']) {
+          errors.push(`Dòng ${rowNum}: Thiếu Mã VT`);
+          continue;
+        }
+
+        const quantity = Number(row['Số lượng vật tư']);
+        if (!row['Số lượng vật tư'] || isNaN(quantity) || quantity <= 0 || !Number.isInteger(quantity)) {
+          errors.push(`Dòng ${rowNum}: Số lượng vật tư không hợp lệ (phải là số nguyên dương)`);
+          continue;
+        }
+
+        // Parse date - support multiple formats
+        let ngayNhanMau: Date;
+        const dateInput = row['Ngày nhận mẫu'];
+        
+        console.log(`Row ${rowNum} - Raw date input:`, dateInput, `Type: ${typeof dateInput}`);
+        
+        // Try parsing as Excel serial number first
+        if (typeof dateInput === 'number') {
+          // Excel date serial number (days since 1900-01-01, with bug for 1900 leap year)
+          // Excel incorrectly treats 1900 as a leap year, so we need to account for that
+          const excelEpoch = new Date(Date.UTC(1899, 11, 30)); // December 30, 1899
+          ngayNhanMau = new Date(excelEpoch.getTime() + dateInput * 86400000);
+          console.log(`Row ${rowNum} - Parsed from Excel serial ${dateInput}: ${ngayNhanMau.toISOString()}`);
+        } else if (typeof dateInput === 'string') {
+          // Try DD/MM/YYYY format first (Vietnamese format)
+          const ddmmyyyyMatch = dateInput.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          if (ddmmyyyyMatch) {
+            const [, day, month, year] = ddmmyyyyMatch;
+            console.log(`Row ${rowNum} - Matched DD/MM/YYYY: day=${day}, month=${month}, year=${year}`);
+            // Create date in UTC to avoid timezone issues
+            ngayNhanMau = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
+            console.log(`Row ${rowNum} - Parsed date: ${ngayNhanMau.toISOString()}`);
+          } else {
+            // Try standard date parsing (YYYY-MM-DD, etc.)
+            ngayNhanMau = new Date(dateInput);
+            console.log(`Row ${rowNum} - Parsed using standard: ${ngayNhanMau.toISOString()}`);
+          }
+        } else if (dateInput instanceof Date) {
+          // Already a Date object (Excel might parse it)
+          ngayNhanMau = dateInput;
+          console.log(`Row ${rowNum} - Already Date object: ${ngayNhanMau.toISOString()}`);
+        } else {
+          // Try direct conversion
+          ngayNhanMau = new Date(dateInput);
+          console.log(`Row ${rowNum} - Direct conversion: ${ngayNhanMau.toISOString()}`);
+        }
+
+        if (isNaN(ngayNhanMau.getTime())) {
+          errors.push(`Dòng ${rowNum}: Ngày nhận mẫu không hợp lệ (định dạng: DD/MM/YYYY hoặc YYYY-MM-DD)`);
+          continue;
+        }
+        
+        console.log(`Row ${rowNum} - Final date stored: ${ngayNhanMau.toISOString().split('T')[0]}`);
+
+        // Find clinic by code
+        const clinic = await this.allocationModel.db.collection('clinics').findOne({
+          maPhongKham: row['Mã PK'].trim()
+        });
+        if (!clinic) {
+          errors.push(`Dòng ${rowNum}: Không tìm thấy phòng khám với mã "${row['Mã PK']}"`);
+          continue;
+        }
+
+        // Find supply
+        const supply = await this.supplyModel.findOne({ maVatTu: row['Mã VT'] }).exec();
+        if (!supply) {
+          errors.push(`Dòng ${rowNum}: Không tìm thấy vật tư với mã "${row['Mã VT']}"`);
+          continue;
+        }
+
+        processedRecords.push({
+          rowNum,
+          ngayNhanMau,
+          clinicId: clinic._id,
+          clinicCode: clinic.maPhongKham,
+          clinicName: clinic.tenPhongKham,
+          supplyId: supply._id,
+          supplyCode: supply.maVatTu,
+          supplyName: supply.tenVatTu,
+          soLuongNhan: quantity,
+        });
+      }
+
+      if (errors.length > 0) {
+        throw new BadRequestException({
+          message: 'Có lỗi trong file Excel',
+          errors,
+        });
+      }
+
+      // Process each record - find matching allocations and update
+      const updatedAllocations: any[] = [];
+      const updateErrors: string[] = [];
+
+      for (const record of processedRecords) {
+        // Find delivered allocations for this clinic with this supply
+        // Use string for query because phongKham is stored as string in database
+        const allocations = await this.allocationModel
+          .find({
+            phongKham: record.clinicId.toString(),
+            trangThai: AllocationStatus.DA_GIAO,
+          })
+          .sort({ ngayGiao: -1 }) // Newest first
+          .exec();
+
+        // Filter allocations that have this supply with available quantity
+        const matchingAllocations = allocations.filter(allocation => {
+          return allocation.danhSachVatTu.some(item => {
+            if (item.vatTu.toString() !== record.supplyId.toString()) return false;
+            const soLuongDaNhan = item.soLuongDaNhan || 0;
+            const soLuongConLai = item.soLuong - soLuongDaNhan;
+            return soLuongConLai > 0; // Only include if has remaining quantity
+          });
+        });
+
+        if (matchingAllocations.length === 0) {
+          updateErrors.push(
+            `Dòng ${record.rowNum}: Không tìm thấy phiếu cấp phát đã giao cho mã PK "${record.clinicCode}" với mã vật tư "${record.supplyCode}"`
+          );
+          continue;
+        }
+
+        // Find the first allocation with enough remaining quantity
+        let selectedAllocation = null;
+        let selectedSupplyItem = null;
+
+        for (const allocation of matchingAllocations) {
+          const supplyItem = allocation.danhSachVatTu.find(
+            (item) => item.vatTu.toString() === record.supplyId.toString()
+          );
+
+          if (!supplyItem) continue;
+
+          const soLuongDaNhan = supplyItem.soLuongDaNhan || 0;
+          const soLuongConLai = supplyItem.soLuong - soLuongDaNhan;
+
+          if (soLuongConLai >= record.soLuongNhan) {
+            selectedAllocation = allocation;
+            selectedSupplyItem = supplyItem;
+            break;
+          }
+        }
+
+        // If no single allocation has enough, report error
+        if (!selectedAllocation) {
+          updateErrors.push(
+            `Dòng ${record.rowNum}: Không có phiếu cấp phát nào có đủ số lượng còn lại (${record.soLuongNhan}) cho mã PK "${record.clinicCode}" với mã vật tư "${record.supplyCode}"`
+          );
+          continue;
+        }
+
+        // Update the selected allocation
+        const soLuongDaNhan = selectedSupplyItem.soLuongDaNhan || 0;
+        selectedSupplyItem.soLuongDaNhan = soLuongDaNhan + record.soLuongNhan;
+
+        // Mark the nested array as modified so Mongoose saves it
+        selectedAllocation.markModified('danhSachVatTu');
+        await selectedAllocation.save();
+
+        // Save single history record
+        await this.saveHistory({
+          vatTu: record.supplyId,
+          loaiThayDoi: HistoryType.NHAN_MAU_VE,
+          soLuong: record.soLuongNhan,
+          lyDo: `Nhận mẫu về từ ${record.clinicName} - Ngày: ${record.ngayNhanMau.toISOString().split('T')[0]}`,
+          nguoiThucHien: nguoiNhap,
+          phieuCapPhat: selectedAllocation._id,
+          thoiGian: record.ngayNhanMau,
+        });
+
+        updatedAllocations.push({
+          ...record,
+          maPhieu: selectedAllocation.maPhieu,
+        });
+      }
+
+      if (updateErrors.length > 0) {
+        // Return partial success with warnings
+        return {
+          success: true,
+          message: `Đã xử lý ${updatedAllocations.length} bản ghi, có ${updateErrors.length} cảnh báo`,
+          warnings: updateErrors,
+          processed: updatedAllocations.length,
+          total: processedRecords.length,
+        };
+      }
+
+      return {
+        success: true,
+        message: `Đã nhập ${updatedAllocations.length} bản ghi thành công`,
+        processed: updatedAllocations.length,
+        details: updatedAllocations,
+      };
+    } catch (error) {
+      console.error('Excel import error:', error);
+
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      if (error instanceof Error) {
+        console.error('Error details:', error.message, error.stack);
+      }
+
+      throw new BadRequestException('Không thể đọc file Excel. Vui lòng kiểm tra định dạng file.');
+    }
   }
+
+  // ============ XÓA LỊCH SỬ NHẬP MẪU NHẬN VỀ ============
+
+  async deleteSampleReturnHistory(id: string): Promise<any> {
+    // Find the history record
+    const history = await this.historyModel.findById(id).exec();
+
+    if (!history) {
+      throw new NotFoundException('Không tìm thấy bản ghi lịch sử');
+    }
+
+    // Only allow deleting NHAN_MAU_VE type
+    if (history.loaiThayDoi !== HistoryType.NHAN_MAU_VE) {
+      throw new BadRequestException('Chỉ có thể xóa bản ghi nhập mẫu nhận về');
+    }
+
+    // Find the allocation and revert soLuongDaNhan
+    if (history.phieuCapPhat) {
+      const allocation = await this.allocationModel
+        .findById(history.phieuCapPhat)
+        .exec();
+
+      if (allocation) {
+        // Find the supply item in allocation
+        const supplyItem = allocation.danhSachVatTu.find(
+          (item) => item.vatTu.toString() === history.vatTu.toString()
+        );
+
+        if (supplyItem) {
+          // Revert the soLuongDaNhan
+          const currentDaNhan = supplyItem.soLuongDaNhan || 0;
+          const revertAmount = history.soLuong;
+
+          supplyItem.soLuongDaNhan = Math.max(0, currentDaNhan - revertAmount);
+
+          // Mark the nested array as modified so Mongoose saves it
+          allocation.markModified('danhSachVatTu');
+          await allocation.save();
+        }
+      }
+    }
+
+    // Delete the history record
+    await this.historyModel.findByIdAndDelete(id).exec();
+
+    return {
+      success: true,
+      message: 'Đã xóa bản ghi thành công',
+    };
+  }
+
+  // ============ MIGRATION ============
+
+
 }
-
