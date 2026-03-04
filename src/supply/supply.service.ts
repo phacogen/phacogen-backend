@@ -755,7 +755,7 @@ export class SupplyService {
     const data: any[] = [];
     const now = new Date();
     now.setHours(0, 0, 0, 0); // Reset to start of day for comparison
-    
+
     for (const allocation of allocations) {
       for (const item of allocation.danhSachVatTu) {
         const soLuongDaNhan = item.soLuongDaNhan || 0;
@@ -765,14 +765,14 @@ export class SupplyService {
         // Calculate expiry warning
         let hanSuDung = null;
         let canhBaoHan = 'Chưa có thông tin';
-        
+
         if (item.hanSuDung) {
           hanSuDung = item.hanSuDung;
           const expiryDate = new Date(item.hanSuDung);
           expiryDate.setHours(0, 0, 0, 0);
-          
+
           const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-          
+
           if (daysUntilExpiry < 0) {
             canhBaoHan = 'Đã hết hạn';
           } else if (daysUntilExpiry <= 3) {
@@ -951,7 +951,7 @@ export class SupplyService {
       // Calculate date warning
       let canhBaoNgay = 'Bình thường';
       let ngayGuiMauGanNhat = 'Chưa gửi';
-      
+
       if (entry.lastReturnDate) {
         ngayGuiMauGanNhat = entry.lastReturnDate.toISOString().split('T')[0];
         const daysSinceLastReturn = Math.floor(
@@ -1221,9 +1221,9 @@ export class SupplyService {
         // Parse date - support multiple formats
         let ngayNhanMau: Date;
         const dateInput = row['Ngày nhận mẫu'];
-        
+
         console.log(`Row ${rowNum} - Raw date input:`, dateInput, `Type: ${typeof dateInput}`);
-        
+
         // Try parsing as Excel serial number first
         if (typeof dateInput === 'number') {
           // Excel date serial number (days since 1900-01-01, with bug for 1900 leap year)
@@ -1259,7 +1259,7 @@ export class SupplyService {
           errors.push(`Dòng ${rowNum}: Ngày nhận mẫu không hợp lệ (định dạng: DD/MM/YYYY hoặc YYYY-MM-DD)`);
           continue;
         }
-        
+
         console.log(`Row ${rowNum} - Final date stored: ${ngayNhanMau.toISOString().split('T')[0]}`);
 
         // Find clinic by code
@@ -1367,12 +1367,13 @@ export class SupplyService {
         selectedAllocation.markModified('danhSachVatTu');
         await selectedAllocation.save();
 
-        // Save single history record
+        // Save history record with soLuong = 0 to track sample returns without affecting warehouse inventory
+        // This is only for tracking purposes and will appear in sample return history
         await this.saveHistory({
           vatTu: record.supplyId,
           loaiThayDoi: HistoryType.NHAN_MAU_VE,
-          soLuong: record.soLuongNhan,
-          lyDo: `Nhận mẫu về từ ${record.clinicName} - Ngày: ${record.ngayNhanMau.toISOString().split('T')[0]}`,
+          soLuong: 0,
+          lyDo: `Nhận ${record.soLuongNhan} mẫu về từ ${record.clinicName} - Ngày: ${record.ngayNhanMau.toISOString().split('T')[0]}`,
           nguoiThucHien: nguoiNhap,
           phieuCapPhat: selectedAllocation._id,
           thoiGian: record.ngayNhanMau,
