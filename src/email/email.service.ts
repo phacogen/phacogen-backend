@@ -57,12 +57,16 @@ export class EmailService {
         `;
       }).join('');
 
-      // Tạo attachments từ image URLs - sử dụng URL trực tiếp với href
-      const attachments = imageUrls.map((url, index) => ({
-        filename: `anh-hoan-thanh-${index + 1}.jpg`,
-        href: url, // Sử dụng href thay vì path để nodemailer tự download
-        cid: `image${index}@phacogen.com`,
-      }));
+      // Tạo attachments từ image URLs - convert sang đường dẫn file local
+      const attachments = imageUrls.map((url, index) => {
+        // Convert URL path sang file path: /uploads/... -> ./uploads/...
+        const filePath = url.startsWith('/') ? `.${url}` : url;
+        return {
+          filename: `anh-hoan-thanh-${index + 1}.jpg`,
+          path: filePath, // Sử dụng path cho file local
+          cid: `image${index}@phacogen.com`,
+        };
+      });
 
       const mailOptions = {
         from: smtpFrom,
@@ -194,12 +198,16 @@ export class EmailService {
         `;
       }).join('');
 
-      // Tạo attachments từ file paths - đọc file từ disk
-      const attachments = imageUrls.map((filePath, index) => ({
-        filename: `anh-hoan-thanh-${index + 1}.jpg`,
-        path: filePath, // Đường dẫn file local
-        cid: `image${index}@phacogen.com`,
-      }));
+      // Tạo attachments từ image URLs - convert sang đường dẫn file local
+      const attachments = imageUrls.map((url, index) => {
+        // Convert URL path sang file path: /uploads/... -> ./uploads/...
+        const filePath = url.startsWith('/') ? `.${url}` : url;
+        return {
+          filename: `anh-hoan-thanh-${index + 1}.jpg`,
+          path: filePath, // Đường dẫn file local
+          cid: `image${index}@phacogen.com`,
+        };
+      });
 
       const mailOptions = {
         from: smtpFrom,
