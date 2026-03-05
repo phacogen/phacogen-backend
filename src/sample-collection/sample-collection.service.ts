@@ -1172,6 +1172,7 @@ export class SampleCollectionService {
           ]
         },
       })
+      .populate('phongKhamItems.phongKham')
       .populate('nguoiGiaoLenh')
       .populate('nhanVienThucHien')
       .exec();
