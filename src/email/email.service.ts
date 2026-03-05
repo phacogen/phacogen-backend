@@ -9,7 +9,8 @@ export class EmailService {
   constructor(private configService: ConfigService) {
     // Cấu hình SMTP transporter
     const smtpHost = this.configService.get<string>('SMTP_HOST', 'smtp.gmail.com');
-    const smtpPort = this.configService.get<number>('SMTP_PORT', 587);
+    const smtpPortStr = this.configService.get<string>('SMTP_PORT', '587');
+    const smtpPort = parseInt(smtpPortStr, 10) || 587; // Convert string to number
     const smtpUser = this.configService.get<string>('SMTP_USER');
     const smtpPass = this.configService.get<string>('SMTP_PASS');
     const smtpSecure = this.configService.get<string>('SMTP_SECURE', 'false') === 'true';
@@ -17,6 +18,7 @@ export class EmailService {
     console.log('SMTP Configuration:', {
       host: smtpHost,
       port: smtpPort,
+      portType: typeof smtpPort,
       user: smtpUser,
       pass: smtpPass ? '***' : 'MISSING',
       secure: smtpSecure,
