@@ -1332,26 +1332,24 @@ export class SupplyService {
       const updateErrors: string[] = [];
 
       for (const record of processedRecords) {
-        // Find delivered allocations for this clinic with this supply
-        // Filter by allocations delivered ON or BEFORE the sample return date
-        const allocations = await this.allocationModel
+        // Find ALL delivered allocations for this clinic (to determine date ranges)
+        const allAllocations = await this.allocationModel
           .find({
             phongKham: record.clinicId.toString(),
             trangThai: AllocationStatus.DA_GIAO,
-            ngayGiao: { $lte: record.ngayNhanMau }, // Allocations delivered on or before sample return date
           })
-          .sort({ ngayGiao: -1 }) // Newest first (closest to sample return date)
+          .sort({ ngayGiao: 1 }) // Oldest first for range calculation
           .exec();
 
         // Filter allocations that have this supply
-        const matchingAllocations = allocations.filter(allocation => {
+        const allocationsWithSupply = allAllocations.filter(allocation => {
           return allocation.danhSachVatTu.some(item => {
             return item.vatTu.toString() === record.supplyId.toString();
           });
         });
 
         // If no matching allocation found, allow import without allocation (clinic using their own supplies)
-        if (matchingAllocations.length === 0) {
+        if (allocationsWithSupply.length === 0) {
           // Save history record without allocation reference but with clinic info
           await this.saveHistory({
             vatTu: record.supplyId,
@@ -1371,8 +1369,64 @@ export class SupplyService {
           continue;
         }
 
-        // Use the most recent allocation (first in sorted list)
-        const targetAllocation = matchingAllocations[0];
+        // Find the correct allocation based on date range logic:
+        // allocation.ngayGiao <= ngayNhanMau < nextAllocation.ngayGiao
+        let targetAllocation = null;
+        
+        for (let i = 0; i < allocationsWithSupply.length; i++) {
+          const currentAllocation = allocationsWithSupply[i];
+          const nextAllocation = allocationsWithSupply[i + 1];
+          
+          const currentDate = new Date(currentAllocation.ngayGiao);
+          const sampleDate = new Date(record.ngayNhanMau);
+          
+          // Reset time parts for accurate date comparison
+          currentDate.setHours(0, 0, 0, 0);
+          sampleDate.setHours(0, 0, 0, 0);
+          
+          // Check if sample date >= current allocation date
+          if (sampleDate >= currentDate) {
+            // If there's a next allocation, check if sample date < next allocation date
+            if (nextAllocation) {
+              const nextDate = new Date(nextAllocation.ngayGiao);
+              nextDate.setHours(0, 0, 0, 0);
+              
+              if (sampleDate < nextDate) {
+                targetAllocation = currentAllocation;
+                break;
+              }
+            } else {
+              // No next allocation, so this is the last one - use it
+              targetAllocation = currentAllocation;
+              break;
+            }
+          }
+        }
+
+        // If still no target allocation found, use the most recent one (fallback)
+        if (!targetAllocation && allocationsWithSupply.length > 0) {
+          targetAllocation = allocationsWithSupply[allocationsWithSupply.length - 1];
+        }
+
+        if (!targetAllocation) {
+          // Save history record without allocation reference but with clinic info
+          await this.saveHistory({
+            vatTu: record.supplyId,
+            loaiThayDoi: HistoryType.NHAN_MAU_VE,
+            soLuong: record.soLuongNhan,
+            lyDo: `Nhận mẫu về từ ${record.clinicName} - Ngày: ${record.ngayNhanMau.toISOString().split('T')[0]} (Chưa có phiếu cấp)`,
+            nguoiThucHien: nguoiNhap,
+            phieuCapPhat: null,
+            phongKham: record.clinicId.toString(),
+            thoiGian: record.ngayNhanMau,
+          });
+
+          updatedAllocations.push({
+            ...record,
+            maPhieu: null,
+          });
+          continue;
+        }
         const supplyItem = targetAllocation.danhSachVatTu.find(
           (item) => item.vatTu.toString() === record.supplyId.toString()
         );
