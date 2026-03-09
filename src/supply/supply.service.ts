@@ -1333,7 +1333,7 @@ export class SupplyService {
 
       for (const record of processedRecords) {
         // Find delivered allocations for this clinic with this supply
-        // Filter by allocations delivered BEFORE or ON the sample return date
+        // Filter by allocations delivered ON or BEFORE the sample return date
         const allocations = await this.allocationModel
           .find({
             phongKham: record.clinicId.toString(),
