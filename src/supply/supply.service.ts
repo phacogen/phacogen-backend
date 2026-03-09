@@ -1373,25 +1373,22 @@ export class SupplyService {
         // allocation.ngayGiao <= ngayNhanMau < nextAllocation.ngayGiao
         let targetAllocation = null;
         
+        // Convert sample date to comparable format (YYYY-MM-DD string)
+        const sampleDateStr = record.ngayNhanMau.toISOString().split('T')[0];
+        
         for (let i = 0; i < allocationsWithSupply.length; i++) {
           const currentAllocation = allocationsWithSupply[i];
           const nextAllocation = allocationsWithSupply[i + 1];
           
-          const currentDate = new Date(currentAllocation.ngayGiao);
-          const sampleDate = new Date(record.ngayNhanMau);
-          
-          // Reset time parts for accurate date comparison
-          currentDate.setHours(0, 0, 0, 0);
-          sampleDate.setHours(0, 0, 0, 0);
+          // Convert to YYYY-MM-DD strings for comparison
+          const currentDateStr = new Date(currentAllocation.ngayGiao).toISOString().split('T')[0];
+          const nextDateStr = nextAllocation ? new Date(nextAllocation.ngayGiao).toISOString().split('T')[0] : null;
           
           // Check if sample date >= current allocation date
-          if (sampleDate >= currentDate) {
+          if (sampleDateStr >= currentDateStr) {
             // If there's a next allocation, check if sample date < next allocation date
-            if (nextAllocation) {
-              const nextDate = new Date(nextAllocation.ngayGiao);
-              nextDate.setHours(0, 0, 0, 0);
-              
-              if (sampleDate < nextDate) {
+            if (nextAllocation && nextDateStr) {
+              if (sampleDateStr < nextDateStr) {
                 targetAllocation = currentAllocation;
                 break;
               }
@@ -1401,11 +1398,6 @@ export class SupplyService {
               break;
             }
           }
-        }
-
-        // If still no target allocation found, use the most recent one (fallback)
-        if (!targetAllocation && allocationsWithSupply.length > 0) {
-          targetAllocation = allocationsWithSupply[allocationsWithSupply.length - 1];
         }
 
         if (!targetAllocation) {
