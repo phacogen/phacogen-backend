@@ -1338,7 +1338,7 @@ export class SupplyService {
           .find({
             phongKham: record.clinicId.toString(),
             trangThai: AllocationStatus.DA_GIAO,
-            ngayGiao: { $lte: record.ngayNhanMau }, // Only allocations delivered before/on sample return date
+            ngayGiao: { $lte: record.ngayNhanMau }, // Allocations delivered on or before sample return date
           })
           .sort({ ngayGiao: -1 }) // Newest first (closest to sample return date)
           .exec();
