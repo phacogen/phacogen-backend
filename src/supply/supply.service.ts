@@ -763,7 +763,8 @@ export class SupplyService {
       for (const item of allocation.danhSachVatTu) {
         const soLuongDaNhan = item.soLuongDaNhan || 0;
         const soLuongTon = item.soLuong - soLuongDaNhan;
-        const tyLeSuDung = item.soLuong > 0 ? Math.round((soLuongDaNhan / item.soLuong) * 100) : 0;
+        // Cap usage percentage at 100%
+        const tyLeSuDung = item.soLuong > 0 ? Math.min(Math.round((soLuongDaNhan / item.soLuong) * 100), 100) : 0;
 
         // Calculate expiry warning
         let hanSuDung = null;
@@ -1047,26 +1048,51 @@ export class SupplyService {
       .limit(limit)
       .exec();
 
-    // Filter by clinic if specified
-    let data = histories.map((h: any) => ({
-      _id: h._id,
-      ngayNhan: h.thoiGian,
-      phongKham: h.phieuCapPhat?.phongKham || null,
-      vatTu: h.vatTu,
-      soLuong: h.soLuong,
-      lyDo: h.lyDo,
-      nguoiNhap: h.nguoiThucHien,
-      maPhieu: h.phieuCapPhat?.maPhieu || '',
-      createdAt: h.createdAt,
-    }));
+    // Map data and get clinic info from either allocation or direct clinic field
+    const data = await Promise.all(
+      histories.map(async (h: any) => {
+        let phongKham = null;
 
-    if (phongKham) {
-      data = data.filter((item) => item.phongKham?._id?.toString() === phongKham);
-    }
+        // Try to get clinic from allocation first
+        if (h.phieuCapPhat?.phongKham) {
+          phongKham = h.phieuCapPhat.phongKham;
+        } 
+        // If no allocation, get clinic from direct field
+        else if (h.phongKham) {
+          const clinic = await this.historyModel.db.collection('clinics').findOne({
+            _id: new Types.ObjectId(h.phongKham),
+          });
+          if (clinic) {
+            phongKham = {
+              _id: clinic._id,
+              maPhongKham: clinic.maPhongKham,
+              tenPhongKham: clinic.tenPhongKham,
+            };
+          }
+        }
+
+        return {
+          _id: h._id,
+          ngayNhan: h.thoiGian,
+          phongKham: phongKham,
+          vatTu: h.vatTu,
+          soLuong: h.soLuong,
+          lyDo: h.lyDo,
+          nguoiNhap: h.nguoiThucHien,
+          maPhieu: h.phieuCapPhat?.maPhieu || '',
+          createdAt: h.createdAt,
+        };
+      })
+    );
+
+    // Filter by clinic if specified
+    const filteredData = phongKham 
+      ? data.filter((item) => item.phongKham?._id?.toString() === phongKham)
+      : data;
 
     return {
-      data,
-      total: phongKham ? data.length : total,
+      data: filteredData,
+      total: phongKham ? filteredData.length : total,
       page,
       limit,
       totalPages: Math.ceil((phongKham ? data.length : total) / limit),
@@ -1307,85 +1333,75 @@ export class SupplyService {
 
       for (const record of processedRecords) {
         // Find delivered allocations for this clinic with this supply
-        // Use string for query because phongKham is stored as string in database
+        // Filter by allocations delivered BEFORE or ON the sample return date
         const allocations = await this.allocationModel
           .find({
             phongKham: record.clinicId.toString(),
             trangThai: AllocationStatus.DA_GIAO,
+            ngayGiao: { $lte: record.ngayNhanMau }, // Only allocations delivered before/on sample return date
           })
-          .sort({ ngayGiao: -1 }) // Newest first
+          .sort({ ngayGiao: -1 }) // Newest first (closest to sample return date)
           .exec();
 
-        // Filter allocations that have this supply with available quantity
+        // Filter allocations that have this supply
         const matchingAllocations = allocations.filter(allocation => {
           return allocation.danhSachVatTu.some(item => {
-            if (item.vatTu.toString() !== record.supplyId.toString()) return false;
-            const soLuongDaNhan = item.soLuongDaNhan || 0;
-            const soLuongConLai = item.soLuong - soLuongDaNhan;
-            return soLuongConLai > 0; // Only include if has remaining quantity
+            return item.vatTu.toString() === record.supplyId.toString();
           });
         });
 
+        // If no matching allocation found, allow import without allocation (clinic using their own supplies)
         if (matchingAllocations.length === 0) {
-          updateErrors.push(
-            `Dòng ${record.rowNum}: Không tìm thấy phiếu cấp phát đã giao cho mã PK "${record.clinicCode}" với mã vật tư "${record.supplyCode}"`
-          );
+          // Save history record without allocation reference but with clinic info
+          await this.saveHistory({
+            vatTu: record.supplyId,
+            loaiThayDoi: HistoryType.NHAN_MAU_VE,
+            soLuong: record.soLuongNhan,
+            lyDo: `Nhận mẫu về từ ${record.clinicName} - Ngày: ${record.ngayNhanMau.toISOString().split('T')[0]} (Chưa có phiếu cấp)`,
+            nguoiThucHien: nguoiNhap,
+            phieuCapPhat: null, // No allocation reference
+            phongKham: record.clinicId.toString(), // Store clinic ID directly
+            thoiGian: record.ngayNhanMau,
+          });
+
+          updatedAllocations.push({
+            ...record,
+            maPhieu: null,
+          });
           continue;
         }
 
-        // Find the first allocation with enough remaining quantity
-        let selectedAllocation = null;
-        let selectedSupplyItem = null;
+        // Use the most recent allocation (first in sorted list)
+        const targetAllocation = matchingAllocations[0];
+        const supplyItem = targetAllocation.danhSachVatTu.find(
+          (item) => item.vatTu.toString() === record.supplyId.toString()
+        );
 
-        for (const allocation of matchingAllocations) {
-          const supplyItem = allocation.danhSachVatTu.find(
-            (item) => item.vatTu.toString() === record.supplyId.toString()
-          );
-
-          if (!supplyItem) continue;
-
+        if (supplyItem) {
+          // Update the allocation
           const soLuongDaNhan = supplyItem.soLuongDaNhan || 0;
-          const soLuongConLai = supplyItem.soLuong - soLuongDaNhan;
+          supplyItem.soLuongDaNhan = soLuongDaNhan + record.soLuongNhan;
 
-          if (soLuongConLai >= record.soLuongNhan) {
-            selectedAllocation = allocation;
-            selectedSupplyItem = supplyItem;
-            break;
-          }
+          // Mark the nested array as modified so Mongoose saves it
+          targetAllocation.markModified('danhSachVatTu');
+          await targetAllocation.save();
+
+          // Save history record
+          await this.saveHistory({
+            vatTu: record.supplyId,
+            loaiThayDoi: HistoryType.NHAN_MAU_VE,
+            soLuong: record.soLuongNhan,
+            lyDo: `Nhận mẫu về từ ${record.clinicName} - Ngày: ${record.ngayNhanMau.toISOString().split('T')[0]}`,
+            nguoiThucHien: nguoiNhap,
+            phieuCapPhat: targetAllocation._id,
+            thoiGian: record.ngayNhanMau,
+          });
+
+          updatedAllocations.push({
+            ...record,
+            maPhieu: targetAllocation.maPhieu,
+          });
         }
-
-        // If no single allocation has enough, report error
-        if (!selectedAllocation) {
-          updateErrors.push(
-            `Dòng ${record.rowNum}: Không có phiếu cấp phát nào có đủ số lượng còn lại (${record.soLuongNhan}) cho mã PK "${record.clinicCode}" với mã vật tư "${record.supplyCode}"`
-          );
-          continue;
-        }
-
-        // Update the selected allocation
-        const soLuongDaNhan = selectedSupplyItem.soLuongDaNhan || 0;
-        selectedSupplyItem.soLuongDaNhan = soLuongDaNhan + record.soLuongNhan;
-
-        // Mark the nested array as modified so Mongoose saves it
-        selectedAllocation.markModified('danhSachVatTu');
-        await selectedAllocation.save();
-
-        // Save history record for tracking sample returns
-        // Note: This is clinic-level tracking and should NOT affect warehouse inventory
-        await this.saveHistory({
-          vatTu: record.supplyId,
-          loaiThayDoi: HistoryType.NHAN_MAU_VE,
-          soLuong: record.soLuongNhan,
-          lyDo: `Nhận mẫu về từ ${record.clinicName} - Ngày: ${record.ngayNhanMau.toISOString().split('T')[0]}`,
-          nguoiThucHien: nguoiNhap,
-          phieuCapPhat: selectedAllocation._id,
-          thoiGian: record.ngayNhanMau,
-        });
-
-        updatedAllocations.push({
-          ...record,
-          maPhieu: selectedAllocation.maPhieu,
-        });
       }
 
       if (updateErrors.length > 0) {

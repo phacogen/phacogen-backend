@@ -35,6 +35,9 @@ export class SupplyHistory {
   @Prop({ type: Types.ObjectId, ref: 'SupplyAllocation' })
   phieuCapPhat: Types.ObjectId; // Liên kết đến phiếu cấp phát (nếu có)
 
+  @Prop({ type: String })
+  phongKham: string; // Mã phòng khám (dùng khi không có phiếu cấp phát)
+
   @Prop({ required: true })
   thoiGian: Date;
 
