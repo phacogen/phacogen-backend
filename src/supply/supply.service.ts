@@ -1376,6 +1376,14 @@ export class SupplyService {
         // Convert sample date to comparable format (YYYY-MM-DD string)
         const sampleDateStr = record.ngayNhanMau.toISOString().split('T')[0];
         
+        console.log(`\n=== ALLOCATION MATCHING for ${record.supplyName} ===`);
+        console.log(`Sample date: ${sampleDateStr}`);
+        console.log(`Available allocations (${allocationsWithSupply.length}):`);
+        allocationsWithSupply.forEach((alloc, idx) => {
+          const allocDateStr = new Date(alloc.ngayGiao).toISOString().split('T')[0];
+          console.log(`  [${idx}] ${alloc.maPhieu}: ${allocDateStr}`);
+        });
+        
         for (let i = 0; i < allocationsWithSupply.length; i++) {
           const currentAllocation = allocationsWithSupply[i];
           const nextAllocation = allocationsWithSupply[i + 1];
@@ -1384,20 +1392,33 @@ export class SupplyService {
           const currentDateStr = new Date(currentAllocation.ngayGiao).toISOString().split('T')[0];
           const nextDateStr = nextAllocation ? new Date(nextAllocation.ngayGiao).toISOString().split('T')[0] : null;
           
+          console.log(`\nChecking [${i}] ${currentAllocation.maPhieu}:`);
+          console.log(`  Current: ${currentDateStr}, Sample: ${sampleDateStr}, Next: ${nextDateStr || 'none'}`);
+          console.log(`  Sample >= Current? ${sampleDateStr >= currentDateStr}`);
+          
           // Check if sample date >= current allocation date
           if (sampleDateStr >= currentDateStr) {
             // If there's a next allocation, check if sample date < next allocation date
             if (nextAllocation && nextDateStr) {
+              console.log(`  Sample < Next? ${sampleDateStr < nextDateStr}`);
               if (sampleDateStr < nextDateStr) {
+                console.log(`  ✓ MATCH! Using ${currentAllocation.maPhieu}`);
                 targetAllocation = currentAllocation;
                 break;
               }
             } else {
               // No next allocation, so this is the last one - use it
+              console.log(`  ✓ MATCH! Last allocation ${currentAllocation.maPhieu}`);
               targetAllocation = currentAllocation;
               break;
             }
           }
+        }
+        
+        if (targetAllocation) {
+          console.log(`\n✓ Final: ${targetAllocation.maPhieu}\n`);
+        } else {
+          console.log(`\n✗ No match found\n`);
         }
 
         if (!targetAllocation) {
