@@ -770,7 +770,8 @@ export class SampleCollectionService {
     // Define columns
     worksheet.columns = [
       { header: 'Mã lệnh', key: 'maLenh', width: 15 },
-      { header: 'Phòng khám / Nhà xe', key: 'phongKham', width: 30 },
+      { header: 'Nhà xe', key: 'nhaXe', width: 25 },
+      { header: 'Phòng khám', key: 'phongKham', width: 30 },
       { header: 'Nội dung công việc', key: 'noiDungCongViec', width: 25 },
       { header: 'Trạng thái', key: 'trangThai', width: 20 },
       { header: 'Ưu tiên', key: 'uuTien', width: 10 },
@@ -807,65 +808,121 @@ export class SampleCollectionService {
 
     // Add data rows
     collections.forEach((collection: any) => {
-      // Get clinic/bus station name
-      let phongKhamName = '';
-      if (collection.tenNhaXe) {
-        phongKhamName = `🚌 ${collection.tenNhaXe}`;
-      } else if (collection.phongKhamItems && collection.phongKhamItems.length > 0) {
-        const firstClinic = collection.phongKhamItems[0].phongKham;
-        phongKhamName = firstClinic?.tenPhongKham || 'N/A';
-      }
+      // For bus station orders with multiple clinics, create one row per clinic
+      if (collection.tenNhaXe && collection.phongKhamItems && collection.phongKhamItems.length > 0) {
+        const startRow = worksheet.rowCount + 1;
+        
+        collection.phongKhamItems.forEach((item: any, index: number) => {
+          const row = worksheet.addRow({
+            maLenh: index === 0 ? collection.maLenh : '',
+            nhaXe: index === 0 ? collection.tenNhaXe : '',
+            phongKham: item.phongKham?.tenPhongKham || 'N/A',
+            noiDungCongViec: index === 0 ? collection.noiDungCongViec?.tenCongViec || 'N/A' : '',
+            trangThai: index === 0 ? statusLabels[collection.trangThai] || collection.trangThai : '',
+            uuTien: index === 0 ? (collection.uuTien ? 'Gấp' : 'Bình thường') : '',
+            nguoiGiaoLenh: index === 0 ? collection.nguoiGiaoLenh?.hoTen || 'N/A' : '',
+            nhanVienThucHien: index === 0 ? collection.nhanVienThucHien?.hoTen || 'Chưa phân công' : '',
+            khoangCach: index === 0 ? (collection.khoangCachDiChuyen ? collection.khoangCachDiChuyen.toFixed(2) : '-') : '',
+            createdAt: index === 0 ? (collection.createdAt ? new Date(collection.createdAt).toLocaleString('vi-VN') : '') : '',
+            thoiGianHenHoanThanh: index === 0 ? (collection.thoiGianHenHoanThanh
+              ? new Date(collection.thoiGianHenHoanThanh).toLocaleString('vi-VN')
+              : 'Không có') : '',
+            ghiChu: index === 0 ? collection.ghiChu || '' : '',
+            soTienCuocNhanMau: item.soTienCuocNhanMau || 0,
+            soTienShip: item.soTienShip || 0,
+            soTienGuiXe: item.soTienGuiXe || 0,
+            tongTien: (item.soTienCuocNhanMau || 0) + (item.soTienShip || 0) + (item.soTienGuiXe || 0),
+          });
 
-      // Calculate total money
-      let tongTien = 0;
-      if (collection.phongKhamItems && collection.phongKhamItems.length > 0) {
-        collection.phongKhamItems.forEach((item: any) => {
-          tongTien += (item.soTienCuocNhanMau || 0) + (item.soTienShip || 0) + (item.soTienGuiXe || 0);
+          // Format money columns (now columns 13, 14, 15, 16 due to new nhaXe column)
+          [13, 14, 15, 16].forEach((colNum) => {
+            const cell = row.getCell(colNum);
+            cell.numFmt = '#,##0';
+          });
+
+          // Highlight urgent orders
+          if (collection.uuTien && index === 0) {
+            row.getCell(6).fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFFFCCCC' },
+            };
+          }
         });
-      }
 
-      const row = worksheet.addRow({
-        maLenh: collection.maLenh,
-        phongKham: phongKhamName,
-        noiDungCongViec: collection.noiDungCongViec?.tenCongViec || 'N/A',
-        trangThai: statusLabels[collection.trangThai] || collection.trangThai,
-        uuTien: collection.uuTien ? 'Gấp' : 'Bình thường',
-        nguoiGiaoLenh: collection.nguoiGiaoLenh?.hoTen || 'N/A',
-        nhanVienThucHien: collection.nhanVienThucHien?.hoTen || 'Chưa phân công',
-        khoangCach: collection.khoangCachDiChuyen ? collection.khoangCachDiChuyen.toFixed(2) : '-',
-        createdAt: collection.createdAt ? new Date(collection.createdAt).toLocaleString('vi-VN') : '',
-        thoiGianHenHoanThanh: collection.thoiGianHenHoanThanh
-          ? new Date(collection.thoiGianHenHoanThanh).toLocaleString('vi-VN')
-          : 'Không có',
-        ghiChu: collection.ghiChu || '',
-        soTienCuocNhanMau:
-          collection.phongKhamItems && collection.phongKhamItems.length > 0
-            ? collection.phongKhamItems[0].soTienCuocNhanMau || 0
-            : 0,
-        soTienShip:
-          collection.phongKhamItems && collection.phongKhamItems.length > 0
-            ? collection.phongKhamItems[0].soTienShip || 0
-            : 0,
-        soTienGuiXe:
-          collection.phongKhamItems && collection.phongKhamItems.length > 0
-            ? collection.phongKhamItems[0].soTienGuiXe || 0
-            : 0,
-        tongTien: tongTien,
-      });
+        // Merge cells for bus station orders (columns that should be merged)
+        const endRow = worksheet.rowCount;
+        if (endRow > startRow) {
+          // Merge: Mã lệnh, Nhà xe, Nội dung công việc, Trạng thái, Ưu tiên, Người giao lệnh, Nhân viên, Khoảng cách, Thời gian tạo, Hạn hoàn thành, Ghi chú
+          [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12].forEach((colNum) => {
+            worksheet.mergeCells(startRow, colNum, endRow, colNum);
+            const cell = worksheet.getCell(startRow, colNum);
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          });
+        }
+      } else {
+        // Regular clinic order (single row)
+        let phongKhamName = '';
+        if (collection.phongKhamItems && collection.phongKhamItems.length > 0) {
+          const clinicNames = collection.phongKhamItems
+            .map((item: any) => item.phongKham?.tenPhongKham)
+            .filter((name: string) => name)
+            .join(', ');
+          phongKhamName = clinicNames || 'N/A';
+        }
 
-      // Format money columns (cột 12, 13, 14, 15 vì đã thêm cột khoảng cách)
-      [12, 13, 14, 15].forEach((colNum) => {
-        const cell = row.getCell(colNum);
-        cell.numFmt = '#,##0';
-      });
+        // Calculate total money
+        let tongTien = 0;
+        if (collection.phongKhamItems && collection.phongKhamItems.length > 0) {
+          collection.phongKhamItems.forEach((item: any) => {
+            tongTien += (item.soTienCuocNhanMau || 0) + (item.soTienShip || 0) + (item.soTienGuiXe || 0);
+          });
+        }
 
-      // Highlight urgent orders
-      if (collection.uuTien) {
-        row.getCell(5).fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFFFCCCC' },
-        };
+        const row = worksheet.addRow({
+          maLenh: collection.maLenh,
+          nhaXe: '',
+          phongKham: phongKhamName,
+          noiDungCongViec: collection.noiDungCongViec?.tenCongViec || 'N/A',
+          trangThai: statusLabels[collection.trangThai] || collection.trangThai,
+          uuTien: collection.uuTien ? 'Gấp' : 'Bình thường',
+          nguoiGiaoLenh: collection.nguoiGiaoLenh?.hoTen || 'N/A',
+          nhanVienThucHien: collection.nhanVienThucHien?.hoTen || 'Chưa phân công',
+          khoangCach: collection.khoangCachDiChuyen ? collection.khoangCachDiChuyen.toFixed(2) : '-',
+          createdAt: collection.createdAt ? new Date(collection.createdAt).toLocaleString('vi-VN') : '',
+          thoiGianHenHoanThanh: collection.thoiGianHenHoanThanh
+            ? new Date(collection.thoiGianHenHoanThanh).toLocaleString('vi-VN')
+            : 'Không có',
+          ghiChu: collection.ghiChu || '',
+          soTienCuocNhanMau:
+            collection.phongKhamItems && collection.phongKhamItems.length > 0
+              ? collection.phongKhamItems[0].soTienCuocNhanMau || 0
+              : 0,
+          soTienShip:
+            collection.phongKhamItems && collection.phongKhamItems.length > 0
+              ? collection.phongKhamItems[0].soTienShip || 0
+              : 0,
+          soTienGuiXe:
+            collection.phongKhamItems && collection.phongKhamItems.length > 0
+              ? collection.phongKhamItems[0].soTienGuiXe || 0
+              : 0,
+          tongTien: tongTien,
+        });
+
+        // Format money columns
+        [13, 14, 15, 16].forEach((colNum) => {
+          const cell = row.getCell(colNum);
+          cell.numFmt = '#,##0';
+        });
+
+        // Highlight urgent orders
+        if (collection.uuTien) {
+          row.getCell(6).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFCCCC' },
+          };
+        }
       }
     });
 
