@@ -10,6 +10,7 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { Permission } from '../role/schemas/role.schema';
 import { AssignStaffDto } from './dto/assign-staff.dto';
 import { CreateSampleCollectionDto } from './dto/create-sample-collection.dto';
+import { CompleteVerificationDto } from './dto/complete-verification.dto';
 import { UpdateSampleCollectionDto } from './dto/update-sample-collection.dto';
 import { UpdateSampleCollectionStatusDto } from './dto/update-status.dto';
 import { SampleCollectionService } from './sample-collection.service';
@@ -375,6 +376,23 @@ export class SampleCollectionController {
     return this.sampleCollectionService.completeVerificationWithClinicItems(
       id,
       body.phongKhamItems,
+      body.nguoiThucHien
+    );
+  }
+
+  @Post(':id/complete-verification')
+  @Permissions(Permission.ORDER_UPDATE)
+  @ApiOperation({ summary: 'Hoàn thành kiểm tra cho lệnh thu mẫu thường' })
+  @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
+  @ApiResponse({ status: 200, description: 'Đã hoàn thành kiểm tra' })
+  @ApiResponse({ status: 400, description: 'Lệnh chưa hoàn thành hoặc không hợp lệ' })
+  async completeVerification(
+    @Param('id') id: string,
+    @Body() body: CompleteVerificationDto
+  ) {
+    return this.sampleCollectionService.completeVerification(
+      id,
+      body.anhHoanThanhKiemTra,
       body.nguoiThucHien
     );
   }

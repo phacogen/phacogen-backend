@@ -1536,6 +1536,68 @@ export class SampleCollectionService {
     return updated;
   }
 
+  // Hoàn thành kiểm tra cho lệnh thu mẫu thường
+  async completeVerification(
+    id: string,
+    anhHoanThanhKiemTra: string[],
+    nguoiThucHien: string
+  ): Promise<SampleCollection> {
+    const order = await this.findOne(id);
+
+    if (!order) {
+      throw new Error('Không tìm thấy lệnh thu mẫu');
+    }
+
+    if (this.isBusStationOrder(order)) {
+      throw new Error('Lệnh nhà xe phải sử dụng endpoint khác');
+    }
+
+    if (order.trangThai !== SampleCollectionStatus.HOAN_THANH) {
+      throw new Error('Lệnh phải ở trạng thái HOAN_THANH trước khi hoàn thành kiểm tra');
+    }
+
+    // Update ảnh hoàn thành kiểm tra cho phòng khám đầu tiên (lệnh thường chỉ có 1 phòng khám)
+    const updatedPhongKhamItems = [...order.phongKhamItems];
+    if (updatedPhongKhamItems && updatedPhongKhamItems.length > 0) {
+      updatedPhongKhamItems[0] = {
+        ...updatedPhongKhamItems[0],
+        anhHoanThanhKiemTra: anhHoanThanhKiemTra,
+      };
+    }
+
+    // Cập nhật trạng thái và ảnh
+    const updated = await this.sampleCollectionModel
+      .findByIdAndUpdate(
+        id,
+        {
+          phongKhamItems: updatedPhongKhamItems,
+          trangThai: SampleCollectionStatus.HOAN_THANH_KIEM_TRA,
+          thoiGianHoanThanhKiemTra: new Date()
+        },
+        { new: true }
+      )
+      .populate('phongKhamItems.phongKham')
+      .populate('noiDungCongViec')
+      .populate('nguoiGiaoLenh')
+      .populate('nhanVienThucHien')
+      .populate('phongKhamKiemTra')
+      .exec();
+
+    // Lưu lịch sử
+    await this.saveHistory(
+      id,
+      SampleCollectionStatus.HOAN_THANH,
+      SampleCollectionStatus.HOAN_THANH_KIEM_TRA,
+      nguoiThucHien,
+      'Hoàn thành kiểm tra'
+    );
+
+    // Gửi thông báo
+    await this.sendStatusChangeNotifications(updated, 'Hoàn thành kiểm tra');
+
+    return updated;
+  }
+
   // Gửi email cho các phòng khám trong bus station order
   private async sendBusStationClinicEmails(order: SampleCollection): Promise<void> {
     if (!order.phongKhamItems || order.phongKhamItems.length === 0) {
