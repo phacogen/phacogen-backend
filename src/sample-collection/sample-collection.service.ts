@@ -1560,27 +1560,42 @@ export class SampleCollectionService {
 
     console.log('Original phongKhamItems:', order.phongKhamItems);
 
-    // Update ảnh hoàn thành kiểm tra cho phòng khám đầu tiên (lệnh thường chỉ có 1 phòng khám)
-    if (order.phongKhamItems && order.phongKhamItems.length > 0) {
-      order.phongKhamItems[0].anhHoanThanhKiemTra = anhHoanThanhKiemTra;
-      order.phongKhamItems[0].thoiGianHoanThanhKiemTra = new Date();
+    // Ensure phongKhamItems exists and has at least one element
+    if (!order.phongKhamItems || order.phongKhamItems.length === 0) {
+      throw new Error('Lệnh không có thông tin phòng khám');
     }
 
-    // Cập nhật trạng thái
-    order.trangThai = SampleCollectionStatus.HOAN_THANH_KIEM_TRA;
-    order.thoiGianHoanThanhKiemTra = new Date();
+    // Update the first phongKhamItems element directly
+    const updatedPhongKhamItems = [...order.phongKhamItems];
+    updatedPhongKhamItems[0] = {
+      ...updatedPhongKhamItems[0],
+      anhHoanThanhKiemTra: anhHoanThanhKiemTra,
+      thoiGianHoanThanhKiemTra: new Date()
+    };
 
-    // Lưu document
-    const updated = await order.save();
+    // Use findByIdAndUpdate to update the entire phongKhamItems array
+    const updated = await this.sampleCollectionModel
+      .findByIdAndUpdate(
+        id,
+        {
+          phongKhamItems: updatedPhongKhamItems,
+          trangThai: SampleCollectionStatus.HOAN_THANH_KIEM_TRA,
+          thoiGianHoanThanhKiemTra: new Date()
+        },
+        { new: true }
+      )
+      .populate('phongKhamItems.phongKham')
+      .populate('noiDungCongViec')
+      .populate('nguoiGiaoLenh')
+      .populate('nhanVienThucHien')
+      .populate('phongKhamKiemTra')
+      .exec();
 
-    // Populate lại để trả về đầy đủ thông tin
-    await updated.populate('phongKhamItems.phongKham');
-    await updated.populate('noiDungCongViec');
-    await updated.populate('nguoiGiaoLenh');
-    await updated.populate('nhanVienThucHien');
-    await updated.populate('phongKhamKiemTra');
+    if (!updated) {
+      throw new Error('Không thể cập nhật lệnh thu mẫu');
+    }
 
-    console.log('Final updated document:', JSON.stringify(updated.phongKhamItems, null, 2));
+    console.log('Updated phongKhamItems:', JSON.stringify(updated.phongKhamItems, null, 2));
 
     // Lưu lịch sử
     await this.saveHistory(
@@ -1649,5 +1664,33 @@ export class SampleCollectionService {
       message,
     });
     return newMessage.save();
+  }
+
+  async updateVerificationImages(id: string, phongKhamItems: any[]): Promise<SampleCollection> {
+    const order = await this.findOne(id);
+
+    if (!order) {
+      throw new Error('Không tìm thấy lệnh thu mẫu');
+    }
+
+    // Update the order with new phongKhamItems
+    const updated = await this.sampleCollectionModel
+      .findByIdAndUpdate(
+        id,
+        { phongKhamItems },
+        { new: true }
+      )
+      .populate('phongKhamItems.phongKham')
+      .populate('noiDungCongViec')
+      .populate('nguoiGiaoLenh')
+      .populate('nhanVienThucHien')
+      .populate('phongKhamKiemTra')
+      .exec();
+
+    if (!updated) {
+      throw new Error('Không thể cập nhật lệnh thu mẫu');
+    }
+
+    return updated;
   }
 }

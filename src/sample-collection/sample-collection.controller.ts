@@ -397,6 +397,18 @@ export class SampleCollectionController {
     );
   }
 
+  @Put(':id/verification-images')
+  @Permissions(Permission.ORDER_UPDATE)
+  @ApiOperation({ summary: 'Cập nhật ảnh hoàn thành kiểm tra' })
+  @ApiParam({ name: 'id', description: 'ID của lệnh nhận mẫu' })
+  @ApiResponse({ status: 200, description: 'Cập nhật ảnh thành công' })
+  async updateVerificationImages(
+    @Param('id') id: string,
+    @Body() updateData: { phongKhamItems: any[] },
+  ) {
+    return this.sampleCollectionService.updateVerificationImages(id, updateData.phongKhamItems);
+  }
+
   @Get(':id/messages')
   @ApiOperation({ summary: 'Lấy danh sách tin nhắn của lệnh' })
   @ApiParam({ name: 'id', description: 'ID lệnh nhận mẫu' })
