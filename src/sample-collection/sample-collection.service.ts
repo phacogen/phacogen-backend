@@ -1542,6 +1542,8 @@ export class SampleCollectionService {
     anhHoanThanhKiemTra: string[],
     nguoiThucHien: string
   ): Promise<SampleCollection> {
+    console.log('completeVerification called with:', { id, anhHoanThanhKiemTra, nguoiThucHien });
+    
     const order = await this.findOne(id);
 
     if (!order) {
@@ -1556,14 +1558,21 @@ export class SampleCollectionService {
       throw new Error('Lệnh phải ở trạng thái HOAN_THANH trước khi hoàn thành kiểm tra');
     }
 
+    console.log('Original phongKhamItems:', order.phongKhamItems);
+
     // Update ảnh hoàn thành kiểm tra cho phòng khám đầu tiên (lệnh thường chỉ có 1 phòng khám)
-    const updatedPhongKhamItems = [...order.phongKhamItems];
-    if (updatedPhongKhamItems && updatedPhongKhamItems.length > 0) {
-      updatedPhongKhamItems[0] = {
-        ...updatedPhongKhamItems[0],
-        anhHoanThanhKiemTra: anhHoanThanhKiemTra,
-      };
-    }
+    const updatedPhongKhamItems = order.phongKhamItems.map((item, index) => {
+      if (index === 0) {
+        return {
+          ...item,
+          anhHoanThanhKiemTra: anhHoanThanhKiemTra,
+          thoiGianHoanThanhKiemTra: new Date()
+        };
+      }
+      return item;
+    });
+
+    console.log('Updated phongKhamItems:', updatedPhongKhamItems);
 
     // Cập nhật trạng thái và ảnh
     const updated = await this.sampleCollectionModel
@@ -1582,6 +1591,8 @@ export class SampleCollectionService {
       .populate('nhanVienThucHien')
       .populate('phongKhamKiemTra')
       .exec();
+
+    console.log('Final updated document:', JSON.stringify(updated.phongKhamItems, null, 2));
 
     // Lưu lịch sử
     await this.saveHistory(
