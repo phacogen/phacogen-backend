@@ -1561,36 +1561,24 @@ export class SampleCollectionService {
     console.log('Original phongKhamItems:', order.phongKhamItems);
 
     // Update ảnh hoàn thành kiểm tra cho phòng khám đầu tiên (lệnh thường chỉ có 1 phòng khám)
-    const updatedPhongKhamItems = order.phongKhamItems.map((item, index) => {
-      if (index === 0) {
-        return {
-          ...item,
-          anhHoanThanhKiemTra: anhHoanThanhKiemTra,
-          thoiGianHoanThanhKiemTra: new Date()
-        };
-      }
-      return item;
-    });
+    if (order.phongKhamItems && order.phongKhamItems.length > 0) {
+      order.phongKhamItems[0].anhHoanThanhKiemTra = anhHoanThanhKiemTra;
+      order.phongKhamItems[0].thoiGianHoanThanhKiemTra = new Date();
+    }
 
-    console.log('Updated phongKhamItems:', updatedPhongKhamItems);
+    // Cập nhật trạng thái
+    order.trangThai = SampleCollectionStatus.HOAN_THANH_KIEM_TRA;
+    order.thoiGianHoanThanhKiemTra = new Date();
 
-    // Cập nhật trạng thái và ảnh
-    const updated = await this.sampleCollectionModel
-      .findByIdAndUpdate(
-        id,
-        {
-          phongKhamItems: updatedPhongKhamItems,
-          trangThai: SampleCollectionStatus.HOAN_THANH_KIEM_TRA,
-          thoiGianHoanThanhKiemTra: new Date()
-        },
-        { new: true }
-      )
-      .populate('phongKhamItems.phongKham')
-      .populate('noiDungCongViec')
-      .populate('nguoiGiaoLenh')
-      .populate('nhanVienThucHien')
-      .populate('phongKhamKiemTra')
-      .exec();
+    // Lưu document
+    const updated = await order.save();
+
+    // Populate lại để trả về đầy đủ thông tin
+    await updated.populate('phongKhamItems.phongKham');
+    await updated.populate('noiDungCongViec');
+    await updated.populate('nguoiGiaoLenh');
+    await updated.populate('nhanVienThucHien');
+    await updated.populate('phongKhamKiemTra');
 
     console.log('Final updated document:', JSON.stringify(updated.phongKhamItems, null, 2));
 

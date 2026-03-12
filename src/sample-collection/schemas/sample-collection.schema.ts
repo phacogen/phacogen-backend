@@ -75,7 +75,8 @@ export class SampleCollection extends Document {
       soTienCuocNhanMau: { type: Number, default: 0 },
       soTienShip: { type: Number, default: 0 },
       soTienGuiXe: { type: Number, default: 0 },
-      anhHoanThanhKiemTra: { type: [String], default: [] } // Ảnh hoàn thành kiểm tra (bước HOAN_THANH_KIEM_TRA)
+      anhHoanThanhKiemTra: { type: [String], default: [] }, // Ảnh hoàn thành kiểm tra (bước HOAN_THANH_KIEM_TRA)
+      thoiGianHoanThanhKiemTra: { type: Date } // Thời gian hoàn thành kiểm tra
     }],
     default: []
   })
@@ -85,6 +86,7 @@ export class SampleCollection extends Document {
     soTienShip: number;
     soTienGuiXe: number;
     anhHoanThanhKiemTra: string[];
+    thoiGianHoanThanhKiemTra?: Date;
   }>;
 }
 
