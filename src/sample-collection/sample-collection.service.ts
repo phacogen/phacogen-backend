@@ -1565,22 +1565,17 @@ export class SampleCollectionService {
       throw new Error('Lệnh không có thông tin phòng khám');
     }
 
-    // Update the first phongKhamItems element directly
-    const updatedPhongKhamItems = [...order.phongKhamItems];
-    updatedPhongKhamItems[0] = {
-      ...updatedPhongKhamItems[0],
-      anhHoanThanhKiemTra: anhHoanThanhKiemTra,
-      thoiGianHoanThanhKiemTra: new Date()
-    };
-
-    // Use findByIdAndUpdate to update the entire phongKhamItems array
+    // Update the first phongKhamItems element directly using MongoDB's array update syntax
     const updated = await this.sampleCollectionModel
       .findByIdAndUpdate(
         id,
         {
-          phongKhamItems: updatedPhongKhamItems,
-          trangThai: SampleCollectionStatus.HOAN_THANH_KIEM_TRA,
-          thoiGianHoanThanhKiemTra: new Date()
+          $set: {
+            'phongKhamItems.0.anhHoanThanhKiemTra': anhHoanThanhKiemTra,
+            'phongKhamItems.0.thoiGianHoanThanhKiemTra': new Date(),
+            trangThai: SampleCollectionStatus.HOAN_THANH_KIEM_TRA,
+            thoiGianHoanThanhKiemTra: new Date()
+          }
         },
         { new: true }
       )
@@ -1596,6 +1591,18 @@ export class SampleCollectionService {
     }
 
     console.log('Updated phongKhamItems:', JSON.stringify(updated.phongKhamItems, null, 2));
+    
+    // Log specifically the verification images for debugging
+    if (updated.phongKhamItems && updated.phongKhamItems[0]) {
+      console.log('Verification images in response:', updated.phongKhamItems[0].anhHoanThanhKiemTra);
+      console.log('Verification images count:', updated.phongKhamItems[0].anhHoanThanhKiemTra?.length || 0);
+    }
+
+    // Double-check by fetching the document again to ensure it was saved
+    const doubleCheck = await this.sampleCollectionModel.findById(id).exec();
+    if (doubleCheck && doubleCheck.phongKhamItems && doubleCheck.phongKhamItems[0]) {
+      console.log('Double-check verification images:', doubleCheck.phongKhamItems[0].anhHoanThanhKiemTra);
+    }
 
     // Lưu lịch sử
     await this.saveHistory(
