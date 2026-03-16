@@ -428,6 +428,19 @@ export class SampleCollectionService {
       delete data.soTienGuiXe;
     }
 
+    // Handle phongKhamItems update (for bus station orders)
+    if (data.phongKhamItems && Array.isArray(data.phongKhamItems)) {
+      // Convert to plain objects to avoid Mongoose metadata issues
+      data.phongKhamItems = data.phongKhamItems.map(item => ({
+        phongKham: item.phongKham,
+        soTienCuocNhanMau: item.soTienCuocNhanMau || 0,
+        soTienShip: item.soTienShip || 0,
+        soTienGuiXe: item.soTienGuiXe || 0,
+        anhHoanThanhKiemTra: item.anhHoanThanhKiemTra || [],
+        thoiGianHoanThanhKiemTra: item.thoiGianHoanThanhKiemTra,
+      }));
+    }
+
     const result = await this.sampleCollectionModel
       .findByIdAndUpdate(id, data, { new: true })
       .populate('phongKhamItems.phongKham')
