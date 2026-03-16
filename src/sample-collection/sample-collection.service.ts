@@ -1607,13 +1607,17 @@ export class SampleCollectionService {
       throw new Error('Lệnh không có thông tin phòng khám');
     }
 
+    // Get existing verification images and append new ones
+    const existingImages = order.phongKhamItems[0]?.anhHoanThanhKiemTra || [];
+    const combinedImages = [...existingImages, ...anhHoanThanhKiemTra];
+
     // Update the first phongKhamItems element directly using MongoDB's array update syntax
     const updated = await this.sampleCollectionModel
       .findByIdAndUpdate(
         id,
         {
           $set: {
-            'phongKhamItems.0.anhHoanThanhKiemTra': anhHoanThanhKiemTra,
+            'phongKhamItems.0.anhHoanThanhKiemTra': combinedImages, // APPEND instead of REPLACE
             'phongKhamItems.0.thoiGianHoanThanhKiemTra': new Date(),
             trangThai: SampleCollectionStatus.HOAN_THANH_KIEM_TRA,
             thoiGianHoanThanhKiemTra: new Date()

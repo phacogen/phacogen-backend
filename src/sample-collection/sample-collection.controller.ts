@@ -312,20 +312,28 @@ export class SampleCollectionController {
     @Param('id') id: string,
     @UploadedFiles() files: Array<any>,
     @Query('saveToDb') saveToDb?: string,
+    @Query('type') type?: string, // 'completion' or 'verification'
   ) {
     const imagePaths = files.map(file => `/uploads/sample-collections/${file.filename}`);
 
     // Nếu saveToDb = 'true', lưu vào database (cho bước hoàn thành standard)
     // Nếu không, chỉ trả về đường dẫn (cho bước verification bus station)
     if (saveToDb === 'true') {
+      // Get existing order to append to existing images instead of replacing
+      const existingOrder = await this.sampleCollectionService.findOne(id);
+      const existingImages = existingOrder?.anhHoanThanh || [];
+      const combinedImages = [...existingImages, ...imagePaths];
+      
       return this.sampleCollectionService.update(id, {
-        anhHoanThanh: imagePaths,
+        anhHoanThanh: combinedImages,
       });
     }
 
-    // Mặc định: chỉ trả về đường dẫn
+    // Trả về field name phù hợp với loại ảnh
+    const fieldName = type === 'verification' ? 'anhHoanThanhKiemTra' : 'anhHoanThanh';
+    
     return {
-      anhHoanThanh: imagePaths,
+      [fieldName]: imagePaths,
       message: 'Upload thành công',
     };
   }
