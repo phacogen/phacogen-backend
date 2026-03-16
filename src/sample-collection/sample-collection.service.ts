@@ -391,6 +391,27 @@ export class SampleCollectionService {
       data.uuTien = data.uuTien === true || data.uuTien === 'true';
     }
 
+    // Handle phongKham update - update phongKhamItems[0] instead of old phongKham field
+    if (data.phongKham && oldData.phongKhamItems && oldData.phongKhamItems.length > 0) {
+      // Update phongKhamItems[0].phongKham
+      const updatedPhongKhamItems = [...oldData.phongKhamItems];
+      updatedPhongKhamItems[0] = {
+        ...updatedPhongKhamItems[0],
+        phongKham: data.phongKham,
+        // Update cost fields if provided
+        soTienCuocNhanMau: data.soTienCuocNhanMau !== undefined ? data.soTienCuocNhanMau : updatedPhongKhamItems[0].soTienCuocNhanMau,
+        soTienShip: data.soTienShip !== undefined ? data.soTienShip : updatedPhongKhamItems[0].soTienShip,
+        soTienGuiXe: data.soTienGuiXe !== undefined ? data.soTienGuiXe : updatedPhongKhamItems[0].soTienGuiXe,
+      };
+      
+      // Replace phongKham with phongKhamItems in data
+      data.phongKhamItems = updatedPhongKhamItems;
+      delete data.phongKham;
+      delete data.soTienCuocNhanMau;
+      delete data.soTienShip;
+      delete data.soTienGuiXe;
+    }
+
     const result = await this.sampleCollectionModel
       .findByIdAndUpdate(id, data, { new: true })
       .populate('phongKhamItems.phongKham')
