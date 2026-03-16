@@ -386,31 +386,68 @@ export class SampleCollectionService {
   async update(id: string, data: any): Promise<SampleCollection> {
     const oldData = await this.sampleCollectionModel.findById(id).exec();
 
+    console.log('=== UPDATE METHOD DEBUG ===');
+    console.log('Order ID:', id);
+    console.log('Incoming data:', JSON.stringify(data, null, 2));
+    console.log('Old phongKhamItems:', JSON.stringify(oldData.phongKhamItems, null, 2));
+
     // Ensure uuTien is boolean if provided
     if (data.uuTien !== undefined) {
       data.uuTien = data.uuTien === true || data.uuTien === 'true';
     }
 
     // Handle phongKham update - update phongKhamItems[0] instead of old phongKham field
-    if (data.phongKham && oldData.phongKhamItems && oldData.phongKhamItems.length > 0) {
-      // Update phongKhamItems[0].phongKham
-      const updatedPhongKhamItems = [...oldData.phongKhamItems];
-      updatedPhongKhamItems[0] = {
-        ...updatedPhongKhamItems[0],
-        phongKham: data.phongKham,
-        // Update cost fields if provided
-        soTienCuocNhanMau: data.soTienCuocNhanMau !== undefined ? data.soTienCuocNhanMau : updatedPhongKhamItems[0].soTienCuocNhanMau,
-        soTienShip: data.soTienShip !== undefined ? data.soTienShip : updatedPhongKhamItems[0].soTienShip,
-        soTienGuiXe: data.soTienGuiXe !== undefined ? data.soTienGuiXe : updatedPhongKhamItems[0].soTienGuiXe,
-      };
+    if (data.phongKham) {
+      console.log('Detected phongKham update:', data.phongKham);
+      
+      // Get existing phongKhamItems or create new array
+      // Convert to plain objects to avoid Mongoose metadata issues
+      const existingItems = oldData.phongKhamItems && oldData.phongKhamItems.length > 0 
+        ? oldData.phongKhamItems.map(item => ({
+            phongKham: item.phongKham,
+            soTienCuocNhanMau: item.soTienCuocNhanMau,
+            soTienShip: item.soTienShip,
+            soTienGuiXe: item.soTienGuiXe,
+            anhHoanThanhKiemTra: item.anhHoanThanhKiemTra || [],
+            thoiGianHoanThanhKiemTra: item.thoiGianHoanThanhKiemTra,
+          }))
+        : [];
+
+      if (existingItems.length > 0) {
+        // Update existing first item
+        console.log('Updating existing phongKhamItems[0]');
+        existingItems[0] = {
+          ...existingItems[0],
+          phongKham: data.phongKham,
+          // Update cost fields if provided
+          soTienCuocNhanMau: data.soTienCuocNhanMau !== undefined ? data.soTienCuocNhanMau : existingItems[0].soTienCuocNhanMau,
+          soTienShip: data.soTienShip !== undefined ? data.soTienShip : existingItems[0].soTienShip,
+          soTienGuiXe: data.soTienGuiXe !== undefined ? data.soTienGuiXe : existingItems[0].soTienGuiXe,
+        };
+      } else {
+        // Create new phongKhamItems array with one item
+        console.log('Creating new phongKhamItems array');
+        existingItems.push({
+          phongKham: data.phongKham,
+          soTienCuocNhanMau: data.soTienCuocNhanMau || 0,
+          soTienShip: data.soTienShip || 0,
+          soTienGuiXe: data.soTienGuiXe || 0,
+          anhHoanThanhKiemTra: [],
+          thoiGianHoanThanhKiemTra: undefined,
+        });
+      }
       
       // Replace phongKham with phongKhamItems in data
-      data.phongKhamItems = updatedPhongKhamItems;
+      data.phongKhamItems = existingItems;
+      console.log('Updated phongKhamItems (plain objects):', JSON.stringify(data.phongKhamItems, null, 2));
+      
       delete data.phongKham;
       delete data.soTienCuocNhanMau;
       delete data.soTienShip;
       delete data.soTienGuiXe;
     }
+
+    console.log('Final data to update:', JSON.stringify(data, null, 2));
 
     const result = await this.sampleCollectionModel
       .findByIdAndUpdate(id, data, { new: true })
@@ -420,6 +457,8 @@ export class SampleCollectionService {
       .populate('nhanVienThucHien')
       .populate('phongKhamKiemTra')
       .exec();
+
+    console.log('Update result phongKhamItems:', JSON.stringify(result?.phongKhamItems, null, 2));
 
     // Nếu có thay đổi trạng thái, lưu lịch sử
     if (result && data.trangThai && oldData.trangThai !== data.trangThai) {
