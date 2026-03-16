@@ -93,10 +93,7 @@ export class SampleCollectionService {
             clinic.toaDo.lat,
             clinic.toaDo.lng
           );
-          console.log(`Auto-create: Calculated distance for ${saved.maLenh}: ${khoangCach} km`);
           await this.sampleCollectionModel.findByIdAndUpdate(saved._id, { khoangCachDiChuyen: khoangCach }).exec();
-        } else {
-          console.log(`Auto-create: Cannot calculate distance - employee location: ${!!employee?.viTriHienTai}, clinic coords: ${!!clinic?.toaDo}`);
         }
       } catch (error) {
         console.error('Error calculating distance in auto-create:', error);
@@ -186,20 +183,14 @@ export class SampleCollectionService {
   }> {
     const { status, search, employeeId, clinicId, page = 1, limit = 10, currentUser, startDate, endDate } = params;
 
-    console.log('=== findAllWithPagination params ===', { status, search, employeeId, clinicId, page, limit, startDate, endDate });
-
     // Build query filter
     const filter = await this.buildQueryFilter({ status, search, employeeId, clinicId, currentUser, startDate, endDate });
 
     // Calculate skip
     const skip = (page - 1) * limit;
 
-    console.log('Final filter:', JSON.stringify(filter, null, 2));
-
     // Get total count
     const total = await this.sampleCollectionModel.countDocuments(filter).exec();
-
-    console.log('Total documents found:', total);
 
     // Get paginated data
     const data = await this.sampleCollectionModel
@@ -386,11 +377,6 @@ export class SampleCollectionService {
   async update(id: string, data: any): Promise<SampleCollection> {
     const oldData = await this.sampleCollectionModel.findById(id).exec();
 
-    console.log('=== UPDATE METHOD DEBUG ===');
-    console.log('Order ID:', id);
-    console.log('Incoming data:', JSON.stringify(data, null, 2));
-    console.log('Old phongKhamItems:', JSON.stringify(oldData.phongKhamItems, null, 2));
-
     // Ensure uuTien is boolean if provided
     if (data.uuTien !== undefined) {
       data.uuTien = data.uuTien === true || data.uuTien === 'true';
@@ -398,8 +384,6 @@ export class SampleCollectionService {
 
     // Handle phongKham update - update phongKhamItems[0] instead of old phongKham field
     if (data.phongKham) {
-      console.log('Detected phongKham update:', data.phongKham);
-      
       // Get existing phongKhamItems or create new array
       // Convert to plain objects to avoid Mongoose metadata issues
       const existingItems = oldData.phongKhamItems && oldData.phongKhamItems.length > 0 
@@ -415,7 +399,6 @@ export class SampleCollectionService {
 
       if (existingItems.length > 0) {
         // Update existing first item
-        console.log('Updating existing phongKhamItems[0]');
         existingItems[0] = {
           ...existingItems[0],
           phongKham: data.phongKham,
@@ -426,7 +409,6 @@ export class SampleCollectionService {
         };
       } else {
         // Create new phongKhamItems array with one item
-        console.log('Creating new phongKhamItems array');
         existingItems.push({
           phongKham: data.phongKham,
           soTienCuocNhanMau: data.soTienCuocNhanMau || 0,
@@ -439,15 +421,12 @@ export class SampleCollectionService {
       
       // Replace phongKham with phongKhamItems in data
       data.phongKhamItems = existingItems;
-      console.log('Updated phongKhamItems (plain objects):', JSON.stringify(data.phongKhamItems, null, 2));
       
       delete data.phongKham;
       delete data.soTienCuocNhanMau;
       delete data.soTienShip;
       delete data.soTienGuiXe;
     }
-
-    console.log('Final data to update:', JSON.stringify(data, null, 2));
 
     const result = await this.sampleCollectionModel
       .findByIdAndUpdate(id, data, { new: true })
@@ -457,8 +436,6 @@ export class SampleCollectionService {
       .populate('nhanVienThucHien')
       .populate('phongKhamKiemTra')
       .exec();
-
-    console.log('Update result phongKhamItems:', JSON.stringify(result?.phongKhamItems, null, 2));
 
     // Nếu có thay đổi trạng thái, lưu lịch sử
     if (result && data.trangThai && oldData.trangThai !== data.trangThai) {
@@ -568,7 +545,6 @@ export class SampleCollectionService {
           relatedOrderId: id,
         });
       }
-      console.log(`Notifications sent for order assignment ${result.maLenh} to ${recipientIds.size} users`);
     }
 
     return result;
@@ -1393,8 +1369,6 @@ export class SampleCollectionService {
   @Cron('0 8 * * *')
   async handleAutoCreateOrders() {
     try {
-      console.log('Running auto-create orders cron job...');
-
       // Lấy admin đầu tiên làm người giao lệnh
       const admins = await this.getAdminUsers();
       if (admins.length === 0) {
@@ -1405,7 +1379,6 @@ export class SampleCollectionService {
       const nguoiGiaoLenh = admins[0]._id.toString();
       const result = await this.autoCreateOrders(nguoiGiaoLenh);
 
-      console.log(`Auto-create orders completed: ${result.created} created, ${result.skipped} skipped`);
       if (result.errors.length > 0) {
         console.error('Auto-create orders errors:', result.errors);
       }
@@ -1602,8 +1575,6 @@ export class SampleCollectionService {
     anhHoanThanhKiemTra: string[],
     nguoiThucHien: string
   ): Promise<SampleCollection> {
-    console.log('completeVerification called with:', { id, anhHoanThanhKiemTra, nguoiThucHien });
-    
     const order = await this.findOne(id);
 
     if (!order) {
@@ -1617,8 +1588,6 @@ export class SampleCollectionService {
     if (order.trangThai !== SampleCollectionStatus.HOAN_THANH) {
       throw new Error('Lệnh phải ở trạng thái HOAN_THANH trước khi hoàn thành kiểm tra');
     }
-
-    console.log('Original phongKhamItems:', order.phongKhamItems);
 
     // Ensure phongKhamItems exists and has at least one element
     if (!order.phongKhamItems || order.phongKhamItems.length === 0) {
@@ -1648,20 +1617,6 @@ export class SampleCollectionService {
 
     if (!updated) {
       throw new Error('Không thể cập nhật lệnh thu mẫu');
-    }
-
-    console.log('Updated phongKhamItems:', JSON.stringify(updated.phongKhamItems, null, 2));
-    
-    // Log specifically the verification images for debugging
-    if (updated.phongKhamItems && updated.phongKhamItems[0]) {
-      console.log('Verification images in response:', updated.phongKhamItems[0].anhHoanThanhKiemTra);
-      console.log('Verification images count:', updated.phongKhamItems[0].anhHoanThanhKiemTra?.length || 0);
-    }
-
-    // Double-check by fetching the document again to ensure it was saved
-    const doubleCheck = await this.sampleCollectionModel.findById(id).exec();
-    if (doubleCheck && doubleCheck.phongKhamItems && doubleCheck.phongKhamItems[0]) {
-      console.log('Double-check verification images:', doubleCheck.phongKhamItems[0].anhHoanThanhKiemTra);
     }
 
     // Lưu lịch sử

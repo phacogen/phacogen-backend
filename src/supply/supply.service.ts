@@ -743,19 +743,15 @@ export class SupplyService {
       ];
     }
 
-    const skip = (page - 1) * limit;
-    const total = await this.allocationModel.countDocuments(filter).exec();
-
+    // Fetch ALL allocations matching filter (no pagination yet)
     const allocations = await this.allocationModel
       .find(filter)
       .populate('phongKham', 'maPhongKham tenPhongKham')
       .sort({ ngayGiao: -1 })
-      .skip(skip)
-      .limit(limit)
       .exec();
 
     // Flatten data - one row per supply item
-    const data: any[] = [];
+    const allData: any[] = [];
     const now = new Date();
     now.setHours(0, 0, 0, 0); // Reset to start of day for comparison
 
@@ -786,7 +782,7 @@ export class SupplyService {
           }
         }
 
-        data.push({
+        allData.push({
           _id: `${allocation._id}_${item.vatTu}`,
           ngayCap: allocation.ngayGiao,
           maPhieu: allocation.maPhieu,
@@ -802,12 +798,17 @@ export class SupplyService {
       }
     }
 
+    // Apply pagination AFTER flattening
+    const total = allData.length;
+    const skip = (page - 1) * limit;
+    const paginatedData = allData.slice(skip, skip + limit);
+
     return {
-      data,
-      total: data.length,
+      data: paginatedData,
+      total,
       page,
       limit,
-      totalPages: Math.ceil(data.length / limit),
+      totalPages: Math.ceil(total / limit),
     };
   }
 
