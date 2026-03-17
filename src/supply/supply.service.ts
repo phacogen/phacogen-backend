@@ -886,18 +886,21 @@ export class SupplyService {
           .populate('phongKham')
           .exec();
 
-        if (!allocation) continue;
+        if (!allocation || !allocation.phongKham) continue;
 
         clinicId = (allocation.phongKham as any)._id.toString();
         clinicName = (allocation.phongKham as any).tenPhongKham;
-      } else if (history.phongKham) {
-        // No allocation but has clinic directly in history
+      } else if (history.phongKham && typeof history.phongKham === 'object' && (history.phongKham as any)._id) {
+        // No allocation but has clinic directly in history (populated)
         clinicId = (history.phongKham as any)._id.toString();
-        clinicName = (history.phongKham as any).tenPhongKham;
+        clinicName = (history.phongKham as any).tenPhongKham || 'N/A';
       } else {
         // Skip if no clinic info
         continue;
       }
+
+      // Check if vatTu exists
+      if (!history.vatTu) continue;
 
       const supplyId = history.vatTu.toString();
       const key = `${clinicId}_${supplyId}`;
@@ -917,7 +920,7 @@ export class SupplyService {
       const entry = reportMap.get(key);
       
       // Update soLuongDaDung (used quantity)
-      entry.soLuongDaDung += history.soLuong;
+      entry.soLuongDaDung += history.soLuong || 0;
       
       // Update last return date
       const returnDate = history.thoiGian;
