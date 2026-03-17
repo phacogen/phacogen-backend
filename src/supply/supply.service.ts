@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as XLSX from 'xlsx';
+import { Clinic } from '../clinic/schemas/clinic.schema';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { ConfirmDeliveryDto } from './dto/confirm-delivery.dto';
 import { CreateAllocationDto } from './dto/create-allocation.dto';
@@ -21,6 +22,8 @@ export class SupplyService {
     private allocationModel: Model<SupplyAllocationDocument>,
     @InjectModel(SupplyHistory.name)
     private historyModel: Model<SupplyHistoryDocument>,
+    @InjectModel(Clinic.name)
+    private clinicModel: Model<Clinic>,
   ) { }
 
   // ============ QUẢN LÝ VẬT TƯ ============
@@ -842,8 +845,12 @@ export class SupplyService {
     const sampleReturnHistory = await this.historyModel
       .find(historyFilter)
       .populate('phieuCapPhat')
-      .populate('phongKham', 'maPhongKham tenPhongKham')
       .exec();
+
+    // Get all clinics for lookup
+    const allClinics = await this.clinicModel.find().exec();
+    const clinicMap = new Map(allClinics.map(c => [c._id.toString(), c]));
+    const clinicByCodeMap = new Map(allClinics.map(c => [c.maPhongKham, c]));
 
     // Build report data grouped by (clinic, supply)
     const reportMap: Map<string, any> = new Map();
@@ -878,6 +885,7 @@ export class SupplyService {
     for (const history of sampleReturnHistory) {
       let clinicId: string;
       let clinicName: string;
+      let clinic: any;
       
       if (history.phieuCapPhat) {
         // Has allocation - get clinic from allocation
@@ -888,12 +896,32 @@ export class SupplyService {
 
         if (!allocation || !allocation.phongKham) continue;
 
-        clinicId = (allocation.phongKham as any)._id.toString();
-        clinicName = (allocation.phongKham as any).tenPhongKham;
-      } else if (history.phongKham && typeof history.phongKham === 'object' && (history.phongKham as any)._id) {
-        // No allocation but has clinic directly in history (populated)
-        clinicId = (history.phongKham as any)._id.toString();
-        clinicName = (history.phongKham as any).tenPhongKham || 'N/A';
+        clinic = allocation.phongKham;
+        clinicId = (clinic as any)._id.toString();
+        clinicName = (clinic as any).tenPhongKham;
+      } else if (history.phongKham) {
+        // No allocation but has clinic in history
+        if (typeof history.phongKham === 'object' && (history.phongKham as any)._id) {
+          // phongKham is populated object
+          clinic = history.phongKham;
+          clinicId = (clinic as any)._id.toString();
+          clinicName = (clinic as any).tenPhongKham || 'N/A';
+        } else if (typeof history.phongKham === 'string') {
+          // phongKham is string (code or ID)
+          clinic = clinicByCodeMap.get(history.phongKham);
+          
+          if (!clinic) {
+            // Try to find by ID if phongKham is actually an ID
+            clinic = clinicMap.get(history.phongKham);
+          }
+          
+          if (!clinic) continue; // Skip if clinic not found
+
+          clinicId = clinic._id.toString();
+          clinicName = clinic.tenPhongKham || 'N/A';
+        } else {
+          continue; // Unknown format
+        }
       } else {
         // Skip if no clinic info
         continue;
