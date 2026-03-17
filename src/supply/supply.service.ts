@@ -842,6 +842,7 @@ export class SupplyService {
     const sampleReturnHistory = await this.historyModel
       .find(historyFilter)
       .populate('phieuCapPhat')
+      .populate('phongKham', 'maPhongKham tenPhongKham')
       .exec();
 
     // Build report data grouped by (clinic, supply)
@@ -873,28 +874,55 @@ export class SupplyService {
       }
     }
 
-    // Process sample return history to find last return date
+    // Process sample return history to find last return date AND handle returns without allocation
     for (const history of sampleReturnHistory) {
-      if (!history.phieuCapPhat) continue;
+      let clinicId: string;
+      let clinicName: string;
+      
+      if (history.phieuCapPhat) {
+        // Has allocation - get clinic from allocation
+        const allocation = await this.allocationModel
+          .findById(history.phieuCapPhat)
+          .populate('phongKham')
+          .exec();
 
-      const allocation = await this.allocationModel
-        .findById(history.phieuCapPhat)
-        .populate('phongKham')
-        .exec();
+        if (!allocation) continue;
 
-      if (!allocation) continue;
+        clinicId = (allocation.phongKham as any)._id.toString();
+        clinicName = (allocation.phongKham as any).tenPhongKham;
+      } else if (history.phongKham) {
+        // No allocation but has clinic directly in history
+        clinicId = (history.phongKham as any)._id.toString();
+        clinicName = (history.phongKham as any).tenPhongKham;
+      } else {
+        // Skip if no clinic info
+        continue;
+      }
 
-      const clinicId = (allocation.phongKham as any)._id.toString();
       const supplyId = history.vatTu.toString();
       const key = `${clinicId}_${supplyId}`;
 
-      if (reportMap.has(key)) {
-        const entry = reportMap.get(key);
-        const returnDate = history.thoiGian;
+      if (!reportMap.has(key)) {
+        // Create entry for returns without allocation
+        reportMap.set(key, {
+          clinicId,
+          clinicName,
+          supplyId,
+          soLuongCap: 0,
+          soLuongDaDung: 0,
+          lastReturnDate: null,
+        });
+      }
 
-        if (!entry.lastReturnDate || returnDate > entry.lastReturnDate) {
-          entry.lastReturnDate = returnDate;
-        }
+      const entry = reportMap.get(key);
+      
+      // Update soLuongDaDung (used quantity)
+      entry.soLuongDaDung += history.soLuong;
+      
+      // Update last return date
+      const returnDate = history.thoiGian;
+      if (!entry.lastReturnDate || returnDate > entry.lastReturnDate) {
+        entry.lastReturnDate = returnDate;
       }
     }
 
