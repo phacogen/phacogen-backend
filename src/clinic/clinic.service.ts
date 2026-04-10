@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Clinic } from './schemas/clinic.schema';
@@ -10,19 +10,43 @@ export class ClinicService {
   async create(data: any): Promise<Clinic> {
     // Auto-generate maPhongKham if not provided
     if (!data.maPhongKham) {
-      // Find the highest existing clinic code
-      const lastClinic = await this.clinicModel
-        .findOne({ maPhongKham: /^PK\d+$/ })
-        .sort({ maPhongKham: -1 })
-        .exec();
+      // Retry logic to handle race conditions
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          // Find all existing clinic codes and get the max number
+          const existingClinics = await this.clinicModel
+            .find({ maPhongKham: /^PK\d+$/ })
+            .select('maPhongKham')
+            .exec();
 
-      let nextNumber = 1;
-      if (lastClinic && lastClinic.maPhongKham) {
-        const lastNumber = parseInt(lastClinic.maPhongKham.replace('PK', ''));
-        nextNumber = lastNumber + 1;
+          let maxNumber = 0;
+          existingClinics.forEach(clinic => {
+            const num = parseInt(clinic.maPhongKham.replace('PK', ''));
+            if (num > maxNumber) {
+              maxNumber = num;
+            }
+          });
+
+          data.maPhongKham = `PK${String(maxNumber + 1).padStart(4, '0')}`;
+          
+          const clinic = new this.clinicModel(data);
+          return await clinic.save();
+        } catch (error) {
+          // If duplicate key error and we have retries left, try again
+          if (error.code === 11000 && retries > 1) {
+            retries--;
+            continue;
+          }
+          throw error;
+        }
       }
-
-      data.maPhongKham = `PK${String(nextNumber).padStart(4, '0')}`;
+    } else {
+      // Check if maPhongKham already exists
+      const existingClinic = await this.clinicModel.findOne({ maPhongKham: data.maPhongKham }).exec();
+      if (existingClinic) {
+        throw new ConflictException(`Mã phòng khám ${data.maPhongKham} đã tồn tại`);
+      }
     }
     
     const clinic = new this.clinicModel(data);
