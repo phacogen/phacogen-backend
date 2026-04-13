@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
@@ -13,19 +13,43 @@ export class UserService {
   async create(data: any): Promise<User> {
     // Auto-generate maNhanVien if not provided
     if (!data.maNhanVien) {
-      // Find the highest existing employee code
-      const lastUser = await this.userModel
-        .findOne({ maNhanVien: /^NV\d+$/ })
-        .sort({ maNhanVien: -1 })
-        .exec();
+      // Retry logic to handle race conditions
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          // Find all existing employee codes and get the max number
+          const existingUsers = await this.userModel
+            .find({ maNhanVien: /^NV\d+$/ })
+            .select('maNhanVien')
+            .exec();
 
-      let nextNumber = 1;
-      if (lastUser && lastUser.maNhanVien) {
-        const lastNumber = parseInt(lastUser.maNhanVien.replace('NV', ''));
-        nextNumber = lastNumber + 1;
+          let maxNumber = 0;
+          existingUsers.forEach(user => {
+            const num = parseInt(user.maNhanVien.replace('NV', ''));
+            if (num > maxNumber) {
+              maxNumber = num;
+            }
+          });
+
+          data.maNhanVien = `NV${String(maxNumber + 1).padStart(4, '0')}`;
+          
+          const user = new this.userModel(data);
+          return await user.save();
+        } catch (error) {
+          // If duplicate key error and we have retries left, try again
+          if (error.code === 11000 && retries > 1) {
+            retries--;
+            continue;
+          }
+          throw error;
+        }
       }
-
-      data.maNhanVien = `NV${String(nextNumber).padStart(4, '0')}`;
+    } else {
+      // Check if maNhanVien already exists
+      const existingUser = await this.userModel.findOne({ maNhanVien: data.maNhanVien }).exec();
+      if (existingUser) {
+        throw new ConflictException(`Mã nhân viên ${data.maNhanVien} đã tồn tại`);
+      }
     }
     
     const user = new this.userModel(data);
