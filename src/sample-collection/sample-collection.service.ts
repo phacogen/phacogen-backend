@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Model, Types } from 'mongoose';
+import { BusStation } from '../bus-station/schemas/bus-station.schema';
 import { EmailService } from '../email/email.service';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType } from '../notification/schemas/notification.schema';
@@ -21,6 +22,8 @@ export class SampleCollectionService {
     private sampleCollectionMessageModel: Model<SampleCollectionMessage>,
     @InjectModel(User.name)
     private userModel: Model<User>,
+    @InjectModel(BusStation.name)
+    private busStationModel: Model<BusStation>,
     private emailService: EmailService,
     private notificationService: NotificationService,
   ) { }
@@ -261,19 +264,21 @@ export class SampleCollectionService {
 
     // Filter by bus station
     if (busStationId) {
-      // Find bus station to get name and address
-      const mongoose = require('mongoose');
-      const busStation = await this.sampleCollectionModel.db.collection('busstations').findOne({
-        _id: new mongoose.Types.ObjectId(busStationId)
-      });
-      
-      if (busStation) {
-        andConditions.push({
-          $and: [
-            { tenNhaXe: busStation.tenNhaXe },
-            { diaChiNhaXe: busStation.diaChi }
-          ]
-        });
+      try {
+        // Find bus station to get name and address
+        const busStation = await this.busStationModel.findById(busStationId).exec();
+        
+        if (busStation) {
+          andConditions.push({
+            $and: [
+              { tenNhaXe: busStation.tenNhaXe },
+              { diaChiNhaXe: busStation.diaChi }
+            ]
+          });
+        }
+      } catch (error) {
+        // If busStationId is invalid, just skip the filter
+        console.error('Invalid busStationId:', busStationId, error);
       }
     }
 
