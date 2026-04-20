@@ -69,16 +69,16 @@ export class Clinic extends Document {
       day: Number, // 0=CN, 1=T2, 2=T3, 3=T4, 4=T5, 5=T6, 6=T7
       isOpen: Boolean,
       openTime: String, // Format: "08:00"
-      closeTime: String, // Format: "17:00"
+      closeTime: String, // Format: "21:00"
     }],
     default: [
-      { day: 1, isOpen: true, openTime: '08:00', closeTime: '17:00' },
-      { day: 2, isOpen: true, openTime: '08:00', closeTime: '17:00' },
-      { day: 3, isOpen: true, openTime: '08:00', closeTime: '17:00' },
-      { day: 4, isOpen: true, openTime: '08:00', closeTime: '17:00' },
-      { day: 5, isOpen: true, openTime: '08:00', closeTime: '17:00' },
-      { day: 6, isOpen: true, openTime: '08:00', closeTime: '12:00' },
-      { day: 0, isOpen: false, openTime: '', closeTime: '' },
+      { day: 1, isOpen: true, openTime: '08:00', closeTime: '21:00' },
+      { day: 2, isOpen: true, openTime: '08:00', closeTime: '21:00' },
+      { day: 3, isOpen: true, openTime: '08:00', closeTime: '21:00' },
+      { day: 4, isOpen: true, openTime: '08:00', closeTime: '21:00' },
+      { day: 5, isOpen: true, openTime: '08:00', closeTime: '21:00' },
+      { day: 6, isOpen: true, openTime: '08:00', closeTime: '21:00' },
+      { day: 0, isOpen: true, openTime: '08:00', closeTime: '21:00' },
     ]
   })
   gioLamViec?: Array<{

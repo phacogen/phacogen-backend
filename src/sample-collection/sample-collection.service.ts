@@ -7,8 +7,8 @@ import { NotificationService } from '../notification/notification.service';
 import { NotificationType } from '../notification/schemas/notification.schema';
 import { User } from '../user/schemas/user.schema';
 import { SampleCollectionHistory } from './schemas/sample-collection-history.schema';
-import { SampleCollection, SampleCollectionStatus } from './schemas/sample-collection.schema';
 import { SampleCollectionMessage } from './schemas/sample-collection-message.schema';
+import { SampleCollection, SampleCollectionStatus } from './schemas/sample-collection.schema';
 
 @Injectable()
 export class SampleCollectionService {
@@ -85,7 +85,7 @@ export class SampleCollectionService {
         // Convert to ObjectId if string
         const clinicObjectId = typeof clinicId === 'string' ? new Types.ObjectId(clinicId) : clinicId;
         const clinic = await this.sampleCollectionModel.db.collection('clinics').findOne({ _id: clinicObjectId });
-        
+
         if (employee?.viTriHienTai && clinic?.toaDo?.lat && clinic?.toaDo?.lng) {
           const khoangCach = this.calculateDistance(
             employee.viTriHienTai.lat,
@@ -169,6 +169,7 @@ export class SampleCollectionService {
     search?: string;
     employeeId?: string;
     clinicId?: string;
+    busStationId?: string;
     page?: number;
     limit?: number;
     currentUser?: any;
@@ -181,10 +182,10 @@ export class SampleCollectionService {
     limit: number;
     totalPages: number;
   }> {
-    const { status, search, employeeId, clinicId, page = 1, limit = 10, currentUser, startDate, endDate } = params;
+    const { status, search, employeeId, clinicId, busStationId, page = 1, limit = 10, currentUser, startDate, endDate } = params;
 
     // Build query filter
-    const filter = await this.buildQueryFilter({ status, search, employeeId, clinicId, currentUser, startDate, endDate });
+    const filter = await this.buildQueryFilter({ status, search, employeeId, clinicId, busStationId, currentUser, startDate, endDate });
 
     // Calculate skip
     const skip = (page - 1) * limit;
@@ -220,11 +221,12 @@ export class SampleCollectionService {
     search?: string;
     employeeId?: string;
     clinicId?: string;
+    busStationId?: string;
     currentUser?: any;
     startDate?: string;
     endDate?: string;
   }): Promise<any> {
-    const { status, search, employeeId, clinicId, currentUser, startDate, endDate } = params;
+    const { status, search, employeeId, clinicId, busStationId, currentUser, startDate, endDate } = params;
 
     const filter: any = {};
     const andConditions: any[] = [];
@@ -257,28 +259,34 @@ export class SampleCollectionService {
       });
     }
 
-    // Filter by employee - LOGIC MỚI DỰA TRÊN PERMISSION
-    // Kiểm tra quyền xem lệnh
-    const hasViewAllPermission = currentUser?.permissions?.includes('ORDER_VIEW_ALL');
-
-    if (employeeId && !hasViewAllPermission) {
-      // Nếu có quyền ORDER_VIEW_OWN hoặc không có quyền ORDER_VIEW_ALL
-      // Áp dụng logic filter theo status
-      const isCompletedStatus = status === SampleCollectionStatus.HOAN_THANH ||
-        status === SampleCollectionStatus.HOAN_THANH_KIEM_TRA;
-
-      if (!isCompletedStatus) {
-        // Với status khác HOAN_THANH và HOAN_THANH_KIEM_TRA: chỉ xem lệnh được giao cho mình
+    // Filter by bus station
+    if (busStationId) {
+      // Find bus station to get name and address
+      const mongoose = require('mongoose');
+      const busStation = await this.sampleCollectionModel.db.collection('busstations').findOne({
+        _id: new mongoose.Types.ObjectId(busStationId)
+      });
+      
+      if (busStation) {
         andConditions.push({
-          $or: [
-            { nguoiGiaoLenh: employeeId },
-            { nhanVienThucHien: employeeId }
+          $and: [
+            { tenNhaXe: busStation.tenNhaXe },
+            { diaChiNhaXe: busStation.diaChi }
           ]
         });
       }
-      // Với status HOAN_THANH hoặc HOAN_THANH_KIEM_TRA: không filter (xem tất cả)
     }
-    // Nếu có quyền ORDER_VIEW_ALL: không filter theo employeeId (xem tất cả)
+
+    // Filter by employee
+    if (employeeId) {
+      // Khi có employeeId (từ filter hoặc từ user thường), luôn filter theo nhân viên đó
+      andConditions.push({
+        $or: [
+          { nguoiGiaoLenh: employeeId },
+          { nhanVienThucHien: employeeId }
+        ]
+      });
+    }
 
     // Search by maLenh or noiDungCongViec
     if (search) {
@@ -316,6 +324,7 @@ export class SampleCollectionService {
     search?: string;
     employeeId?: string;
     clinicId?: string;
+    busStationId?: string;
     currentUser?: any;
     startDate?: string;
     endDate?: string;
@@ -386,15 +395,15 @@ export class SampleCollectionService {
     if (data.phongKham) {
       // Get existing phongKhamItems or create new array
       // Convert to plain objects to avoid Mongoose metadata issues
-      const existingItems = oldData.phongKhamItems && oldData.phongKhamItems.length > 0 
+      const existingItems = oldData.phongKhamItems && oldData.phongKhamItems.length > 0
         ? oldData.phongKhamItems.map(item => ({
-            phongKham: item.phongKham,
-            soTienCuocNhanMau: item.soTienCuocNhanMau,
-            soTienShip: item.soTienShip,
-            soTienGuiXe: item.soTienGuiXe,
-            anhHoanThanhKiemTra: item.anhHoanThanhKiemTra || [],
-            thoiGianHoanThanhKiemTra: item.thoiGianHoanThanhKiemTra,
-          }))
+          phongKham: item.phongKham,
+          soTienCuocNhanMau: item.soTienCuocNhanMau,
+          soTienShip: item.soTienShip,
+          soTienGuiXe: item.soTienGuiXe,
+          anhHoanThanhKiemTra: item.anhHoanThanhKiemTra || [],
+          thoiGianHoanThanhKiemTra: item.thoiGianHoanThanhKiemTra,
+        }))
         : [];
 
       if (existingItems.length > 0) {
@@ -418,10 +427,10 @@ export class SampleCollectionService {
           thoiGianHoanThanhKiemTra: undefined,
         });
       }
-      
+
       // Replace phongKham with phongKhamItems in data
       data.phongKhamItems = existingItems;
-      
+
       delete data.phongKham;
       delete data.soTienCuocNhanMau;
       delete data.soTienShip;
@@ -860,7 +869,7 @@ export class SampleCollectionService {
       // For bus station orders with multiple clinics, create one row per clinic
       if (collection.tenNhaXe && collection.phongKhamItems && collection.phongKhamItems.length > 0) {
         const startRow = worksheet.rowCount + 1;
-        
+
         collection.phongKhamItems.forEach((item: any, index: number) => {
           const row = worksheet.addRow({
             maLenh: index === 0 ? collection.maLenh : '',
@@ -1146,10 +1155,10 @@ export class SampleCollectionService {
     // Tính số lệnh quá hạn
     const now = new Date();
     const overdueCollections = collections.filter(c => {
-      return c.thoiGianHenHoanThanh && 
-             new Date(c.thoiGianHenHoanThanh) < now &&
-             c.trangThai !== SampleCollectionStatus.HOAN_THANH_KIEM_TRA &&
-             c.trangThai !== SampleCollectionStatus.DA_HUY;
+      return c.thoiGianHenHoanThanh &&
+        new Date(c.thoiGianHenHoanThanh) < now &&
+        c.trangThai !== SampleCollectionStatus.HOAN_THANH_KIEM_TRA &&
+        c.trangThai !== SampleCollectionStatus.DA_HUY;
     });
     const tongSoLenhQuaHan = overdueCollections.length;
 
@@ -1165,7 +1174,7 @@ export class SampleCollectionService {
           tongTienGuiXe += item.soTienGuiXe || 0;
         });
       }
-      
+
       // Cộng khoảng cách đã lưu (từ nhân viên đến phòng khám)
       if (c.khoangCachDiChuyen) {
         tongKmDiDuoc += c.khoangCachDiChuyen;
@@ -1184,10 +1193,10 @@ export class SampleCollectionService {
         let kmForOrder = c.khoangCachDiChuyen || 0;
 
         // Kiểm tra lệnh có quá hạn không
-        const isOverdue = c.thoiGianHenHoanThanh && 
-                         new Date(c.thoiGianHenHoanThanh) < now &&
-                         c.trangThai !== SampleCollectionStatus.HOAN_THANH_KIEM_TRA &&
-                         c.trangThai !== SampleCollectionStatus.DA_HUY;
+        const isOverdue = c.thoiGianHenHoanThanh &&
+          new Date(c.thoiGianHenHoanThanh) < now &&
+          c.trangThai !== SampleCollectionStatus.HOAN_THANH_KIEM_TRA &&
+          c.trangThai !== SampleCollectionStatus.DA_HUY;
 
         if (employeeMap.has(id)) {
           const existing = employeeMap.get(id)!;
@@ -1341,7 +1350,7 @@ export class SampleCollectionService {
       const deadline = new Date(order.thoiGianHenHoanThanh);
       const overdueHours = Math.floor((now.getTime() - deadline.getTime()) / (1000 * 60 * 60));
       const overdueMinutes = Math.floor(((now.getTime() - deadline.getTime()) % (1000 * 60 * 60)) / (1000 * 60));
-      
+
       let overdueText = '';
       if (overdueHours > 0) {
         overdueText = `${overdueHours} giờ ${overdueMinutes} phút`;
