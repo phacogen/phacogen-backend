@@ -924,7 +924,7 @@ export class SampleCollectionService {
           });
         }
       } else {
-        // Regular clinic order (single row)
+        // Regular clinic order or bus station order without phongKhamItems (single row)
         let phongKhamName = '';
         if (collection.phongKhamItems && collection.phongKhamItems.length > 0) {
           const clinicNames = collection.phongKhamItems
@@ -944,7 +944,7 @@ export class SampleCollectionService {
 
         const row = worksheet.addRow({
           maLenh: collection.maLenh,
-          nhaXe: '',
+          nhaXe: collection.tenNhaXe || '',
           phongKham: phongKhamName,
           noiDungCongViec: collection.noiDungCongViec?.tenCongViec || 'N/A',
           trangThai: statusLabels[collection.trangThai] || collection.trangThai,
