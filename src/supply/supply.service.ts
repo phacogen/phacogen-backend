@@ -832,6 +832,18 @@ export class SupplyService {
       allocationFilter.phongKham = phongKham; // Use string
     }
 
+    if (startDate || endDate) {
+      allocationFilter.ngayGiao = {};
+      if (startDate) {
+        allocationFilter.ngayGiao.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        allocationFilter.ngayGiao.$lte = end;
+      }
+    }
+
     const allocations = await this.allocationModel
       .find(allocationFilter)
       .populate('phongKham', 'maPhongKham tenPhongKham')
@@ -841,6 +853,22 @@ export class SupplyService {
     const historyFilter: any = {
       loaiThayDoi: HistoryType.NHAN_MAU_VE,
     };
+
+    if (vatTu) {
+      historyFilter.vatTu = new Types.ObjectId(vatTu);
+    }
+
+    if (startDate || endDate) {
+      historyFilter.thoiGian = {};
+      if (startDate) {
+        historyFilter.thoiGian.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        historyFilter.thoiGian.$lte = end;
+      }
+    }
 
     const sampleReturnHistory = await this.historyModel
       .find(historyFilter)
@@ -877,7 +905,8 @@ export class SupplyService {
 
         const entry = reportMap.get(key);
         entry.soLuongCap += supplyItem.soLuong;
-        entry.soLuongDaDung += supplyItem.soLuongDaNhan || 0;
+        // Do not add supplyItem.soLuongDaNhan here to avoid double-counting.
+        // It will be aggregated correctly from the sampleReturnHistory records.
       }
     }
 
@@ -927,6 +956,11 @@ export class SupplyService {
         continue;
       }
 
+      // If filtering by specific clinic, skip if it doesn't match
+      if (phongKham && clinicId !== phongKham) {
+        continue;
+      }
+
       // Check if vatTu exists
       if (!history.vatTu) continue;
 
@@ -962,30 +996,57 @@ export class SupplyService {
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
+    const lastMonthFilter: any = {
+      loaiThayDoi: HistoryType.NHAN_MAU_VE,
+      thoiGian: {
+        $gte: lastMonthStart,
+        $lte: lastMonthEnd,
+      },
+    };
+
+    if (vatTu) {
+      lastMonthFilter.vatTu = new Types.ObjectId(vatTu);
+    }
+
     const lastMonthHistory = await this.historyModel
-      .find({
-        loaiThayDoi: HistoryType.NHAN_MAU_VE,
-        thoiGian: {
-          $gte: lastMonthStart,
-          $lte: lastMonthEnd,
-        },
-      })
+      .find(lastMonthFilter)
       .populate('phieuCapPhat')
       .exec();
 
     const lastMonthUsageMap: Map<string, number> = new Map();
 
     for (const history of lastMonthHistory) {
-      if (!history.phieuCapPhat) continue;
+      let clinicId: string;
+      
+      if (history.phieuCapPhat) {
+        const allocation = await this.allocationModel
+          .findById(history.phieuCapPhat)
+          .populate('phongKham')
+          .exec();
 
-      const allocation = await this.allocationModel
-        .findById(history.phieuCapPhat)
-        .populate('phongKham')
-        .exec();
+        if (!allocation || !allocation.phongKham) continue;
+        clinicId = (allocation.phongKham as any)._id.toString();
+      } else if (history.phongKham) {
+        if (typeof history.phongKham === 'object' && (history.phongKham as any)._id) {
+          clinicId = (history.phongKham as any)._id.toString();
+        } else if (typeof history.phongKham === 'string') {
+          const clinic = clinicByCodeMap.get(history.phongKham) || clinicMap.get(history.phongKham);
+          if (!clinic) continue;
+          clinicId = clinic._id.toString();
+        } else {
+          continue;
+        }
+      } else {
+        continue;
+      }
 
-      if (!allocation) continue;
+      // If filtering by specific clinic, skip if it doesn't match
+      if (phongKham && clinicId !== phongKham) {
+        continue;
+      }
 
-      const clinicId = (allocation.phongKham as any)._id.toString();
+      if (!history.vatTu) continue;
+
       const supplyId = history.vatTu.toString();
       const key = `${clinicId}_${supplyId}`;
 
